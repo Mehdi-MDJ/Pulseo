@@ -1,0 +1,115 @@
+✅ Plan de travail NurseLink AI – Étapes Replit
+
+🧩 Étape 1 – Initialisation du monorepo
+
+ Créer un monorepo TypeScript avec :
+ apps/web → Next.js 14 + Tailwind + Shadcn/ui
+ apps/mobile → React Native Expo + NativeWind
+ packages/backend → tRPC + Prisma + PostgreSQL
+ Configurer base de données Prisma + .env
+ Ajouter outils : ESLint, Prettier, Husky
+ Lancer la DB en local ou Replit Postgres
+🔐 Étape 2 – Authentification (Clerk + Azure AD)
+
+ Intégrer Clerk (JWT) dans web et mobile
+ Ajouter connexion OAuth2 via Azure AD
+ Créer modèle Prisma User avec :
+ Rôle (infirmier / établissement)
+ IBAN, RPPS/ADELI, spécialisation
+ Champs : cguAccepted: boolean, cguAcceptedAt: DateTime
+ Protéger les routes tRPC et interfaces selon rôle
+📑 Étape 3 – CGV/CGU + Consentement obligatoire
+
+ Créer modal CGU/CGV (FR/EN) :
+ Texte scrollable
+ Checkbox désactivée tant que scroll incomplet
+ Afficher le modal :
+ Sur Web → au premier accès
+ Sur Mobile → après inscription avant accès app
+ Stocker le consentement :
+ User.cguAccepted = true
+ User.cguAcceptedAt = now()
+ Bloquer toute fonctionnalité si CGU non acceptées
+🧑‍💻 Étape 4 – Interfaces utilisateur
+
+Web – Établissements
+ Dashboard IA : prédictions d’absences
+ Création de missions
+ Matching infirmiers intelligents
+ Feedback automatique post-mission
+ Export CSV
+ Gestion des équipes internes
+Mobile – Infirmiers
+ Feed de missions géolocalisées
+ Carte interactive des établissements
+ Swipe pour accepter/refuser
+ Calendrier de disponibilité + shifts
+ Paiements & portefeuille
+ Upload documents légaux
+ Historique + certificats PDF
+ Ajouter support multilingue (FR/EN) via i18next
+🗃️ Étape 5 – Backend tRPC + Modèles Prisma
+
+ Créer les modèles suivants :
+ User
+ Establishment
+ Mission
+ Invoice
+ AbsenceForecast
+ Générer la base PostgreSQL avec seed (ex : CHU Lyon Sud)
+ Implémenter routes tRPC :
+ Missions (CRUD)
+ Matching & feed
+ Génération facture
+ Récupération PDF
+🤖 Étape 6 – Agents IA (5 agents)
+
+ ForecastAgent (absences) – DeepAR ou Prophet
+ MatchingAgent – OpenAI embeddings
+ PricingAgent – modèle de régression
+ ComplianceAgent – OCR/API pour documents
+ SupportAgent – Chatbot (RAG + OpenAI)
+ Déployer agents en worker/cron (Fly.io ou Replit worker)
+📄 Étape 7 – PDF dynamique (pdf-lib)
+
+ Générer contrats PDF à l’acceptation d’une mission
+ Générer factures PDF à la fin d’une mission
+ Stocker les fichiers sur S3 compatible (bucket)
+ Enregistrer Invoice.url dans Prisma
+💳 Étape 8 – Paiement Stripe Connect
+
+ Intégrer Stripe Connect (split-payments)
+ Lier compte Stripe au User infirmier
+ Déclencher paiement à clôture de mission
+ Afficher historique & solde dans portefeuille mobile
+🎨 Étape 9 – UX/UI optimisée neuro-marketing
+
+ Couleurs :
+ Bleu #0F8BCE (confiance)
+ Orange #FFB547 (action)
+ Vert #2DBE8D (succès)
+ Rouge #E04848 (alerte)
+ Background clair #F7F9FC / sombre #151A23
+ Utiliser la police Inter
+ Activer le dark mode dans web et mobile
+ Vérifier accessibilité + fluidité UX
+🚀 Étape 10 – Déploiement CI/CD
+
+ Ajouter GitHub Actions :
+ Build Web, Mobile, Backend
+ Lint + Test + Deploy → Fly.io
+ Configurer variables d’environnement
+ Vérifier :
+ Auth
+ Matching IA
+ Paiements tests
+ CGU/CGV et PDF
+✅ Résultat final
+
+ MVP NurseLink AI fonctionnel :
+ Web + Mobile multilingue
+ Auth complète avec consentement RGPD
+ Matching IA + paiements automatisés
+ Génération PDF légale
+ UX neuro-marketing + dark mode
+ Testé avec établissements réels (Lyon, Saint-Étienne)
