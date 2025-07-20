@@ -8,9 +8,14 @@ import {
   SafeAreaView,
   Dimensions,
   StatusBar,
+  useWindowDimensions,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
+import { useNavigation } from '@react-navigation/native';
+import MissionCard from '../components/MissionCard';
+import Button from '../components/Button';
+import { useAppTheme } from '../theme';
 
 const { width, height } = Dimensions.get('window');
 
@@ -47,43 +52,67 @@ export default function HomeScreen() {
     {
       id: 1,
       title: 'Jour Urgences',
-      location: 'CHU Lyon',
+      establishment: 'CHU Lyon',
+      location: 'Lyon, 69003',
       time: '08h00 - 16h00',
       hourlyRate: 28,
       matchScore: 95,
       urgency: 'high',
       bonus: '+10% bonus',
+      shift: 'Jour',
+      duration: '1 jour',
+      specializations: ['Urgences'],
     },
     {
       id: 2,
       title: 'Nuit Réanimation',
-      location: 'Hôpital Croix-Rousse',
+      establishment: 'Hôpital Croix-Rousse',
+      location: 'Lyon, 69004',
       time: '20h00 - 08h00',
       hourlyRate: 30,
       matchScore: 87,
       urgency: 'medium',
       bonus: '+5% bonus',
+      shift: 'Nuit',
+      duration: '1 nuit',
+      specializations: ['Réanimation'],
     },
     {
       id: 3,
       title: 'Weekend Pédiatrie',
-      location: 'Hôpital Femme-Mère-Enfant',
+      establishment: 'Hôpital Femme-Mère-Enfant',
+      location: 'Lyon, 69005',
       time: '08h00 - 20h00',
       hourlyRate: 26,
       matchScore: 92,
       urgency: 'low',
       bonus: null,
+      shift: 'Jour',
+      duration: '2 jours',
+      specializations: ['Pédiatrie'],
     },
   ]);
 
   const [dailyChallenge] = useState({
-    title: 'Défi du jour',
-    description: 'Compléter 2 missions',
+    title: 'Défi quotidien',
+    description: 'Accepter 2 missions aujourd\'hui',
     progress: 1,
     total: 2,
     reward: '50 XP + 10€ bonus',
-    completed: false,
   });
+
+  const { width } = useWindowDimensions();
+  const isMobile = width < 600;
+  const navigation = useNavigation();
+  const theme = useAppTheme();
+
+  const handleMissionPress = (missionId: number) => {
+    console.log('Mission pressée:', missionId);
+  };
+
+  const handleApplyMission = (missionId: number) => {
+    console.log('Candidature pour mission:', missionId);
+  };
 
   const renderHeader = () => (
     <LinearGradient
@@ -169,9 +198,13 @@ export default function HomeScreen() {
 
           <View style={styles.currentMissionFooter}>
             <Text style={styles.hourlyRate}>{currentMission.hourlyRate}€/h</Text>
-            <TouchableOpacity style={styles.viewMissionButton}>
-              <Text style={styles.viewMissionButtonText}>Voir la mission</Text>
-            </TouchableOpacity>
+            <Button
+              title="Voir la mission"
+              onPress={() => {/* TODO: navigation vers le détail de la mission */}}
+              accessibilityLabel="Voir la mission en cours"
+              size="medium"
+              style={{ marginLeft: 8 }}
+            />
           </View>
         </View>
       )}
@@ -209,117 +242,53 @@ export default function HomeScreen() {
       </View>
   );
 
-  const renderMainAction = () => (
-    <View style={styles.mainActionContainer}>
-      <TouchableOpacity style={styles.mainActionButton}>
-        <LinearGradient
-          colors={['#10b981', '#059669']}
-          style={styles.mainActionGradient}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-        >
-          <Ionicons name="search" size={24} color="#ffffff" />
-          <Text style={styles.mainActionText}>TROUVER UNE MISSION</Text>
-        </LinearGradient>
-      </TouchableOpacity>
-    </View>
-  );
-
-  const renderQuickStats = () => (
-    <View style={styles.quickStatsContainer}>
-      {quickStats.map((stat) => (
-        <View key={stat.id} style={styles.quickStatCard}>
-          <View style={[styles.quickStatIcon, { backgroundColor: stat.color + '20' }]}>
-            <Ionicons name={stat.icon} size={20} color={stat.color} />
-          </View>
-          <Text style={styles.quickStatValue}>{stat.value}</Text>
-          <Text style={styles.quickStatLabel}>{stat.label}</Text>
-          <View style={styles.quickStatProgress}>
-            <View
-              style={[
-                styles.quickStatProgressFill,
-                { width: `${stat.progress}%`, backgroundColor: stat.color }
-              ]}
-            />
-            </View>
-              </View>
-        ))}
-    </View>
-  );
-
   const renderUpcomingMissions = () => (
-    <View style={styles.section}>
+    <View style={[styles.section, { alignItems: isMobile ? 'stretch' : 'center' }]}>
       <View style={styles.sectionHeader}>
-        <Text style={styles.sectionTitle}>Prochaines missions</Text>
+        <Text style={[styles.sectionTitle, isMobile ? {} : { fontSize: 22 }]}>Prochaines missions</Text>
         <TouchableOpacity>
           <Text style={styles.seeAllText}>Voir tout</Text>
         </TouchableOpacity>
       </View>
-
       <ScrollView
-        horizontal
+        horizontal={isMobile}
         showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.missionsScrollContainer}
+        contentContainerStyle={[styles.missionsScrollContainer, isMobile ? {} : { justifyContent: 'center' }]}
       >
         {upcomingMissions.map((mission) => (
-        <TouchableOpacity key={mission.id} style={styles.missionCard}>
-            <View style={styles.missionCardHeader}>
-              <Text style={styles.missionCardTitle}>{mission.title}</Text>
-              <View style={[
-                styles.urgencyBadge,
-                {
-                  backgroundColor: mission.urgency === 'high' ? '#ef4444' :
-                                 mission.urgency === 'medium' ? '#f59e0b' : '#10b981'
-                }
-              ]}>
-                <Text style={styles.urgencyBadgeText}>
-                  {mission.urgency === 'high' ? 'Urgent' :
-                   mission.urgency === 'medium' ? 'Modéré' : 'Normal'}
-                </Text>
-              </View>
-            </View>
-
-            <View style={styles.missionCardDetails}>
-              <View style={styles.missionCardDetail}>
-                <Ionicons name="location-outline" size={14} color="#6b7280" />
-                <Text style={styles.missionCardDetailText}>{mission.location}</Text>
-            </View>
-              <View style={styles.missionCardDetail}>
-                <Ionicons name="time-outline" size={14} color="#6b7280" />
-                <Text style={styles.missionCardDetailText}>{mission.time}</Text>
-          </View>
-            </View>
-
-            <View style={styles.missionCardFooter}>
-              <Text style={styles.missionCardRate}>{mission.hourlyRate}€/h</Text>
-              <View style={styles.matchScoreContainer}>
-                <Text style={styles.matchScoreText}>{mission.matchScore}%</Text>
-              </View>
-          </View>
-
-            {mission.bonus && (
-              <View style={styles.bonusContainer}>
-                <Ionicons name="gift" size={12} color="#f59e0b" />
-                <Text style={styles.bonusText}>{mission.bonus}</Text>
-          </View>
-            )}
-        </TouchableOpacity>
-      ))}
+          <MissionCard
+            key={mission.id}
+            mission={mission}
+            mode="compact"
+            onPress={() => handleMissionPress(mission.id)}
+            onApply={() => handleApplyMission(mission.id)}
+            showBonus={true}
+          />
+        ))}
       </ScrollView>
     </View>
   );
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={[styles.container, { backgroundColor: theme.background.primary }]}>
       <ScrollView
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={[styles.scrollContent, { paddingBottom: 32, paddingTop: 8 }]}
       >
         {renderHeader()}
-        {renderDailyChallenge()}
-        {renderMainAction()}
-        {renderQuickStats()}
-        {renderUpcomingMissions()}
+        <Button
+          title="Voir mon profil"
+          onPress={() => navigation.navigate('Profil' as never)}
+          accessibilityLabel="Voir mon profil"
+          size="large"
+          style={{ alignSelf: 'center', marginVertical: 24 }}
+        />
+        <View style={{ marginBottom: 32 }}>
+          {renderDailyChallenge()}
+        </View>
+        <View style={{ marginBottom: 32 }}>
+          {renderUpcomingMissions()}
+        </View>
       </ScrollView>
     </SafeAreaView>
   );
@@ -331,14 +300,15 @@ const styles = StyleSheet.create({
     backgroundColor: '#f8fafc',
   },
   scrollContent: {
-    paddingBottom: 100, // Espace pour la tab bar
+    paddingBottom: 20,
   },
   header: {
-    paddingTop: 20,
-    paddingBottom: 30,
+    backgroundColor: '#2563eb',
     paddingHorizontal: 20,
-    borderBottomLeftRadius: 32,
-    borderBottomRightRadius: 32,
+    paddingTop: 20,
+    paddingBottom: 24,
+    borderBottomLeftRadius: 24,
+    borderBottomRightRadius: 24,
   },
   headerContent: {
     flexDirection: 'row',
@@ -540,17 +510,6 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#10b981',
   },
-  viewMissionButton: {
-    backgroundColor: '#2563eb',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 12,
-  },
-  viewMissionButtonText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#ffffff',
-  },
   dailyChallengeContainer: {
     paddingHorizontal: 20,
     marginTop: 16,
@@ -610,81 +569,6 @@ const styles = StyleSheet.create({
     color: '#ffffff',
     fontWeight: '600',
   },
-  mainActionContainer: {
-    paddingHorizontal: 20,
-    marginBottom: 24,
-  },
-  mainActionButton: {
-    borderRadius: 16,
-    shadowColor: '#10b981',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 12,
-    elevation: 8,
-  },
-  mainActionGradient: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 18,
-    paddingHorizontal: 24,
-    borderRadius: 16,
-  },
-  mainActionText: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#ffffff',
-    marginLeft: 12,
-  },
-  quickStatsContainer: {
-    flexDirection: 'row',
-    paddingHorizontal: 20,
-    marginBottom: 32,
-  },
-  quickStatCard: {
-    flex: 1,
-    backgroundColor: '#ffffff',
-    padding: 16,
-    marginHorizontal: 6,
-    borderRadius: 16,
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    elevation: 2,
-  },
-  quickStatIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 8,
-  },
-  quickStatValue: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#1f2937',
-    marginBottom: 4,
-  },
-  quickStatLabel: {
-    fontSize: 12,
-    color: '#6b7280',
-    fontWeight: '500',
-    marginBottom: 8,
-  },
-  quickStatProgress: {
-    width: '100%',
-    height: 3,
-    backgroundColor: '#f3f4f6',
-    borderRadius: 2,
-    overflow: 'hidden',
-  },
-  quickStatProgressFill: {
-    height: '100%',
-    borderRadius: 2,
-  },
   section: {
     paddingHorizontal: 20,
     marginBottom: 24,
@@ -707,87 +591,5 @@ const styles = StyleSheet.create({
   },
   missionsScrollContainer: {
     paddingRight: 20,
-  },
-  missionCard: {
-    backgroundColor: '#ffffff',
-    padding: 16,
-    marginRight: 12,
-    borderRadius: 16,
-    width: 160,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    elevation: 2,
-  },
-  missionCardHeader: {
-    marginBottom: 12,
-  },
-  missionCardTitle: {
-    fontSize: 14,
-    fontWeight: 'bold',
-    color: '#1f2937',
-    marginBottom: 8,
-  },
-  urgencyBadge: {
-    alignSelf: 'flex-start',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 8,
-  },
-  urgencyBadgeText: {
-    fontSize: 10,
-    color: '#ffffff',
-    fontWeight: '600',
-  },
-  missionCardDetails: {
-    marginBottom: 12,
-  },
-  missionCardDetail: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 6,
-  },
-  missionCardDetailText: {
-    fontSize: 12,
-    color: '#6b7280',
-    marginLeft: 6,
-  },
-  missionCardFooter: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  missionCardRate: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#10b981',
-  },
-  matchScoreContainer: {
-    backgroundColor: '#f3f4f6',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 8,
-  },
-  matchScoreText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#1f2937',
-  },
-  bonusContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#fef3c7',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 8,
-    alignSelf: 'flex-start',
-  },
-  bonusText: {
-    fontSize: 10,
-    color: '#92400e',
-    fontWeight: '600',
-    marginLeft: 4,
   },
 });

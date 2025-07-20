@@ -28,7 +28,9 @@ export interface SignUpData {
 }
 
 class AuthService {
-  private baseURL = 'http://localhost:3000/api'; // Remplacez par votre URL d'API
+  private baseURL = process.env.NODE_ENV === 'production'
+    ? 'https://workspace--5000.replit.dev/api'
+    : 'http://localhost:3000/api';
   private tokenKey = '@nurselink_token';
   private userKey = '@nurselink_user';
 

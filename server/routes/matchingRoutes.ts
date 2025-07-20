@@ -2,14 +2,14 @@
  * ==============================================================================
  * NurseLink AI - Routes de Matching Automatique
  * ==============================================================================
- * 
+ *
  * Routes pour le système de matching intelligent entre missions et infirmiers
  * ==============================================================================
  */
 
 import { Router } from 'express';
 import { reinforcedMatchingService, type MatchingConfig } from '../services/reinforcedMatchingService';
-import { isAuthenticated } from '../replitAuth';
+import { requireAuth, requireRole } from '../middleware/authMiddleware';
 import { z } from 'zod';
 
 const router = Router();
@@ -29,14 +29,14 @@ const matchingCriteriaSchema = z.object({
  * Lance le matching automatique pour une mission
  * POST /api/matching/mission/:id
  */
-router.post('/mission/:id', isAuthenticated, async (req: any, res) => {
+router.post('/mission/:id', requireAuth, async (req: any, res) => {
   try {
     const missionId = parseInt(req.params.id);
-    
+
     if (isNaN(missionId)) {
-      return res.status(400).json({ 
-        error: "ID mission invalide", 
-        code: "INVALID_MISSION_ID" 
+      return res.status(400).json({
+        error: "ID mission invalide",
+        code: "INVALID_MISSION_ID"
       });
     }
 
@@ -45,17 +45,17 @@ router.post('/mission/:id', isAuthenticated, async (req: any, res) => {
     if (req.body && Object.keys(req.body).length > 0) {
       const validation = matchingCriteriaSchema.safeParse(req.body);
       if (!validation.success) {
-        return res.status(400).json({ 
-          error: "Critères de matching invalides", 
+        return res.status(400).json({
+          error: "Critères de matching invalides",
           details: validation.error.issues,
-          code: "INVALID_CRITERIA" 
+          code: "INVALID_CRITERIA"
         });
       }
       criteria = validation.data;
     }
 
     console.log(`🎯 Lancement matching renforcé pour mission ${missionId}`, criteria);
-    
+
     // Configuration du matching renforcé
     const config: MatchingConfig = {
       minimumScore: 60,
@@ -131,7 +131,7 @@ router.post('/mission/:id', isAuthenticated, async (req: any, res) => {
 
     // Exécution de l'algorithme déterministe renforcé
     const matches = reinforcedMatchingService.findBestMatches(mockMission, mockNurses, config);
-    
+
     res.json({
       success: true,
       algorithm: "reinforced_deterministic",
@@ -175,8 +175,8 @@ router.post('/mission/:id', isAuthenticated, async (req: any, res) => {
 
   } catch (error) {
     console.error("❌ Erreur matching mission:", error);
-    res.status(500).json({ 
-      error: "Erreur lors du matching", 
+    res.status(500).json({
+      error: "Erreur lors du matching",
       code: "MATCHING_ERROR",
       message: error instanceof Error ? error.message : "Erreur inconnue"
     });
@@ -187,14 +187,14 @@ router.post('/mission/:id', isAuthenticated, async (req: any, res) => {
  * Récupère les résultats de matching pour une mission
  * GET /api/matching/mission/:id/results
  */
-router.get('/mission/:id/results', isAuthenticated, async (req: any, res) => {
+router.get('/mission/:id/results', requireAuth, async (req: any, res) => {
   try {
     const missionId = parseInt(req.params.id);
-    
+
     if (isNaN(missionId)) {
-      return res.status(400).json({ 
-        error: "ID mission invalide", 
-        code: "INVALID_MISSION_ID" 
+      return res.status(400).json({
+        error: "ID mission invalide",
+        code: "INVALID_MISSION_ID"
       });
     }
 
@@ -212,7 +212,7 @@ router.get('/mission/:id/results', isAuthenticated, async (req: any, res) => {
         maxCandidates: 10
       }
     };
-    
+
     res.json({
       missionId,
       matchingHistory: mockHistory
@@ -220,9 +220,9 @@ router.get('/mission/:id/results', isAuthenticated, async (req: any, res) => {
 
   } catch (error) {
     console.error("❌ Erreur récupération résultats:", error);
-    res.status(500).json({ 
-      error: "Erreur lors de la récupération", 
-      code: "FETCH_ERROR" 
+    res.status(500).json({
+      error: "Erreur lors de la récupération",
+      code: "FETCH_ERROR"
     });
   }
 });
@@ -231,29 +231,29 @@ router.get('/mission/:id/results', isAuthenticated, async (req: any, res) => {
  * Met à jour les critères de matching par défaut d'un établissement
  * PUT /api/matching/establishment/criteria
  */
-router.put('/establishment/criteria', isAuthenticated, async (req: any, res) => {
+router.put('/establishment/criteria', requireAuth, async (req: any, res) => {
   try {
     const validation = matchingCriteriaSchema.safeParse(req.body);
     if (!validation.success) {
-      return res.status(400).json({ 
-        error: "Critères invalides", 
+      return res.status(400).json({
+        error: "Critères invalides",
         details: validation.error.issues,
-        code: "INVALID_CRITERIA" 
+        code: "INVALID_CRITERIA"
       });
     }
 
     // Récupérer l'ID de l'établissement depuis la session
     const establishmentId = req.user.establishmentProfile?.id;
     if (!establishmentId) {
-      return res.status(403).json({ 
-        error: "Accès réservé aux établissements", 
-        code: "FORBIDDEN" 
+      return res.status(403).json({
+        error: "Accès réservé aux établissements",
+        code: "FORBIDDEN"
       });
     }
 
     // Pour la démo, on simule la sauvegarde
     console.log(`💾 Sauvegarde critères pour établissement ${establishmentId}:`, validation.data);
-    
+
     res.json({
       success: true,
       message: "Critères de matching mis à jour",
@@ -263,9 +263,9 @@ router.put('/establishment/criteria', isAuthenticated, async (req: any, res) => 
 
   } catch (error) {
     console.error("❌ Erreur mise à jour critères:", error);
-    res.status(500).json({ 
-      error: "Erreur lors de la mise à jour", 
-      code: "UPDATE_ERROR" 
+    res.status(500).json({
+      error: "Erreur lors de la mise à jour",
+      code: "UPDATE_ERROR"
     });
   }
 });
@@ -285,7 +285,7 @@ router.post('/test', async (req, res) => {
         factors: ["Spécialisation correspondante", "Expérience 5 ans", "Note excellente (4.8/5)"]
       },
       {
-        name: "Pierre Dubois", 
+        name: "Pierre Dubois",
         score: 87,
         distance: 5.1,
         factors: ["Spécialisation correspondante", "Certification BLS", "À proximité"]
@@ -303,7 +303,7 @@ router.post('/test', async (req, res) => {
         factors: ["Spécialisation correspondante", "Disponible immédiatement"]
       }
     ];
-    
+
     res.json({
       success: true,
       message: "Test de matching réalisé avec succès",
@@ -312,8 +312,8 @@ router.post('/test', async (req, res) => {
 
   } catch (error) {
     console.error("❌ Erreur test matching:", error);
-    res.status(500).json({ 
-      error: "Erreur lors du test", 
+    res.status(500).json({
+      error: "Erreur lors du test",
       code: "TEST_ERROR",
       message: error instanceof Error ? error.message : "Erreur inconnue"
     });

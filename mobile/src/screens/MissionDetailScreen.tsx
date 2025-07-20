@@ -12,6 +12,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useNavigation } from '@react-navigation/native';
+import ScreenHeader from '../components/ScreenHeader';
 
 export default function MissionDetailScreen() {
   const navigation = useNavigation();
@@ -59,21 +60,10 @@ export default function MissionDetailScreen() {
     );
   };
 
-  const renderHeader = () => (
-    <View style={styles.header}>
-      <StatusBar barStyle="light-content" backgroundColor="#2563eb" />
-      <TouchableOpacity
-        style={styles.backButton}
-        onPress={() => navigation.goBack()}
-      >
-        <Ionicons name="arrow-back" size={24} color="#ffffff" />
-      </TouchableOpacity>
-      <Text style={styles.headerTitle}>Détails mission</Text>
-      <TouchableOpacity style={styles.shareButton}>
-        <Ionicons name="share-outline" size={24} color="#ffffff" />
-      </TouchableOpacity>
-              </View>
-  );
+  const handleShare = () => {
+    // Logique de partage
+    console.log('Partager la mission');
+  };
 
   const renderMissionHeader = () => (
     <View style={styles.missionHeader}>
@@ -86,7 +76,7 @@ export default function MissionDetailScreen() {
         <View style={styles.matchScoreBadge}>
           <Ionicons name="star" size={16} color="#ffffff" />
           <Text style={styles.matchScoreText}>{mission.matchScore}% match</Text>
-              </View>
+        </View>
 
         <Text style={styles.missionTitle}>{mission.title}</Text>
         <Text style={styles.establishment}>{mission.establishment}</Text>
@@ -95,30 +85,30 @@ export default function MissionDetailScreen() {
           <View style={styles.missionDetail}>
             <Ionicons name="location-outline" size={16} color="#ffffff" />
             <Text style={styles.missionDetailText}>{mission.location} • {mission.distance}</Text>
-                </View>
+          </View>
           <View style={styles.missionDetail}>
             <Ionicons name="time-outline" size={16} color="#ffffff" />
             <Text style={styles.missionDetailText}>{mission.shift} • {mission.duration}</Text>
-                </View>
-              </View>
+          </View>
+        </View>
 
         <View style={styles.urgencyBadge}>
           <Text style={styles.urgencyText}>Urgent</Text>
-                  </View>
+        </View>
       </LinearGradient>
-                </View>
+    </View>
   );
 
   const renderInfoSection = () => (
     <View style={styles.section}>
       <Text style={styles.sectionTitle}>Informations</Text>
 
-                <View style={styles.infoRow}>
+      <View style={styles.infoRow}>
         <Text style={styles.infoLabel}>Taux horaire</Text>
         <Text style={styles.infoValue}>{mission.hourlyRate}€/h</Text>
-              </View>
+      </View>
 
-                <View style={styles.infoRow}>
+      <View style={styles.infoRow}>
         <Text style={styles.infoLabel}>Spécialisations</Text>
         <View style={styles.specializationsContainer}>
           {mission.specializations.map((spec, index) => (
@@ -126,16 +116,16 @@ export default function MissionDetailScreen() {
               <Text style={styles.specText}>{spec}</Text>
             </View>
           ))}
-              </View>
-              </View>
-            </View>
+        </View>
+      </View>
+    </View>
   );
 
   const renderDescriptionSection = () => (
     <View style={styles.section}>
       <Text style={styles.sectionTitle}>Description</Text>
       <Text style={styles.descriptionText}>{mission.description}</Text>
-              </View>
+    </View>
   );
 
   const renderRequirementsSection = () => (
@@ -145,9 +135,9 @@ export default function MissionDetailScreen() {
         <View key={index} style={styles.requirementItem}>
           <Ionicons name="checkmark-circle" size={16} color="#10b981" />
           <Text style={styles.requirementText}>{req}</Text>
-              </View>
+        </View>
       ))}
-              </View>
+    </View>
   );
 
   const renderBenefitsSection = () => (
@@ -157,9 +147,9 @@ export default function MissionDetailScreen() {
         <View key={index} style={styles.benefitItem}>
           <Ionicons name="star" size={16} color="#fbbf24" />
           <Text style={styles.benefitText}>{benefit}</Text>
-              </View>
+        </View>
       ))}
-            </View>
+    </View>
   );
 
   const renderApplyButton = () => (
@@ -179,12 +169,19 @@ export default function MissionDetailScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      {renderHeader()}
+      <ScreenHeader
+        title="Détails mission"
+        onBack={() => navigation.goBack()}
+        onRightPress={handleShare}
+        rightIcon="share-outline"
+        backgroundColor="#2563eb"
+        textColor="#ffffff"
+      />
       <ScrollView
         style={styles.content}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.contentContainer}
-          >
+      >
         {renderMissionHeader()}
         {renderInfoSection()}
         {renderDescriptionSection()}
@@ -200,25 +197,6 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#f8fafc',
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-    backgroundColor: '#2563eb',
-  },
-  backButton: {
-    padding: 8,
-  },
-  headerTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#ffffff',
-  },
-  shareButton: {
-    padding: 8,
   },
   content: {
     flex: 1,

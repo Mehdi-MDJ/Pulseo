@@ -2,14 +2,14 @@
  * ==============================================================================
  * NurseLink AI - Service Assistant IA Conversationnel
  * ==============================================================================
- * 
+ *
  * Assistant IA intelligent pour accompagnement personnalisé des utilisateurs
  * Fonctionnalités : recommandations, négociation, planification carrière
  * ==============================================================================
  */
 
 import OpenAI from "openai";
-import { storage } from "../storage";
+import { storage } from "./storageService";
 import type { User, NurseProfile, EstablishmentProfile, Mission } from "@shared/schema";
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
@@ -98,7 +98,7 @@ export class AIAssistantService {
     }
 
     let userProfile: NurseProfile | EstablishmentProfile | undefined;
-    
+
     if (user.role === 'nurse') {
       userProfile = await storage.getNurseProfile(userId);
     } else if (user.role === 'establishment') {
@@ -133,7 +133,7 @@ export class AIAssistantService {
     });
 
     const result = JSON.parse(response.choices[0].message.content || '{}');
-    
+
     // Enrichissement avec actions personnalisées
     const actions = await this.generateRecommendedActions(context, message, result);
 
@@ -212,8 +212,8 @@ Spécialisation établissement:
    * Génération d'actions recommandées
    */
   private async generateRecommendedActions(
-    context: ConversationContext, 
-    message: string, 
+    context: ConversationContext,
+    message: string,
     aiResult: any
   ): Promise<RecommendedAction[]> {
     const actions: RecommendedAction[] = [];
@@ -266,7 +266,7 @@ Spécialisation établissement:
 
       // Récupération des missions disponibles
       const allMissions = await storage.getAllMissions();
-      
+
       // Scoring IA pour correspondance
       const scoredMissions = await Promise.all(
         allMissions.map(async (mission) => {

@@ -13,14 +13,17 @@ export async function apiRequest(
   data?: unknown | undefined,
 ): Promise<any> {
   const headers: any = data ? { "Content-Type": "application/json" } : {};
-  
+
   // Ajouter le token d'authentification si disponible
   const sessionToken = localStorage.getItem('sessionToken');
   if (sessionToken) {
     headers['Authorization'] = `Bearer ${sessionToken}`;
   }
 
-  const res = await fetch(url, {
+  // S'assurer que l'URL est relative
+  const apiUrl = url.startsWith('/') ? url : `/${url}`;
+
+  const res = await fetch(apiUrl, {
     method,
     headers,
     body: data ? JSON.stringify(data) : undefined,
@@ -38,14 +41,18 @@ export const getQueryFn: <T>(options: {
   ({ on401: unauthorizedBehavior }) =>
   async ({ queryKey }) => {
     const headers: any = {};
-    
+
     // Ajouter le token d'authentification si disponible
     const sessionToken = localStorage.getItem('sessionToken');
     if (sessionToken) {
       headers['Authorization'] = `Bearer ${sessionToken}`;
     }
 
-    const res = await fetch(queryKey[0] as string, {
+    // S'assurer que l'URL est relative
+    const url = queryKey[0] as string;
+    const apiUrl = url.startsWith('/') ? url : `/${url}`;
+
+    const res = await fetch(apiUrl, {
       headers,
       credentials: "include",
     });

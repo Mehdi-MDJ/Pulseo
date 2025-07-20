@@ -4,7 +4,7 @@ import { queryClient } from "./lib/queryClient";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { ThemeProvider } from "@/components/theme-provider";
-import { useAuth } from "@/hooks/useAuth-simple";
+import { useAuth } from "@/hooks/useAuth";
 import LandingSimple from "@/pages/landing-simple";
 import AuthPage from "@/pages/auth-page";
 import Home from "@/pages/home";
@@ -23,6 +23,7 @@ import MissionCreatorSimple from "@/pages/mission-creator-simple";
 import MissionTemplates from "@/pages/mission-templates";
 import ContractsPage from "@/pages/contracts";
 import ContractDemo from "@/pages/contract-demo";
+import ContractTest from "@/pages/contract-test";
 import AIAssistant from "@/pages/ai-assistant";
 import AnalyticsDashboard from "@/pages/analytics-dashboard";
 import AIAssistantDemo from "@/pages/ai-assistant-demo";
@@ -75,6 +76,7 @@ function Router() {
       <Route path="/profile-selector" component={ProfileSelector} />
       <Route path="/profile-creator" component={ProfileCreator} />
       <Route path="/contract-demo" component={ContractDemo} />
+      <Route path="/contract-test" component={ContractTest} />
       <Route path="/assistant-demo" component={AIAssistantDemo} />
       <Route path="/ai-assistant-demo" component={AIAssistantDemo} />
       <Route path="/analytics-demo" component={AnalyticsDemo} />

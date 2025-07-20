@@ -90,3 +90,4 @@ temp/
 # Replit files
 .replit
 replit.nix
+/generated/prisma

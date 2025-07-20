@@ -3,8 +3,10 @@ import * as SecureStore from 'expo-secure-store';
 import Constants from 'expo-constants';
 import { authService } from './authService';
 
-// Configuration API - URL du backend Replit
-const API_BASE_URL = 'https://workspace--5000.replit.dev/api';
+// Configuration API - URL du backend
+const API_BASE_URL = process.env.NODE_ENV === 'production'
+  ? 'https://workspace--5000.replit.dev/api'
+  : 'http://localhost:3000/api';
 
 // Instance Axios configurée
 export const apiClient = axios.create({

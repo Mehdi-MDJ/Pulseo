@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { useAuth } from "../hooks/useAuth-simple";
+import { useAuth } from "../hooks/useAuth";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -41,7 +41,9 @@ import {
   Upload,
   Send,
   Undo2,
-  EyeOff
+  EyeOff,
+  CheckCircle,
+  XCircle
 } from "lucide-react";
 import { Link } from "wouter";
 import { useToast } from "@/hooks/use-toast";
@@ -342,9 +344,25 @@ export default function Dashboard() {
       const res = await apiRequest('PUT', `/api/establishment/candidates/${candidateId}/accept`);
       return res.json();
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['/api/establishment/candidates'] });
-      alert('Candidature acceptée avec succès !');
+
+      // Afficher un message plus informatif avec les détails du candidat
+      const nurseName = data.nurseInfo ? `${data.nurseInfo.firstName} ${data.nurseInfo.lastName}` : 'le candidat';
+      const missionTitle = data.missionInfo?.title || 'la mission';
+
+      toast({
+        title: "✅ Candidature acceptée !",
+        description: `${nurseName} a rejoint l'équipe de ${missionTitle}`,
+        variant: "default"
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "❌ Erreur",
+        description: error.message || "Impossible d'accepter la candidature",
+        variant: "destructive"
+      });
     }
   });
 
@@ -353,65 +371,26 @@ export default function Dashboard() {
       const res = await apiRequest('PUT', `/api/establishment/candidates/${candidateId}/reject`);
       return res.json();
     },
-    onMutate: async (candidateId) => {
-      // Marquer immédiatement comme rejeté avec timer pour l'animation
-      const timer = setTimeout(() => {
-        setRecentlyRejected(prev => {
-          const newMap = new Map(prev);
-          newMap.delete(candidateId);
-          return newMap;
-        });
-      }, 10000);
-
-      setRecentlyRejected(prev => {
-        const newMap = new Map(prev);
-        newMap.set(candidateId, timer);
-        return newMap;
-      });
-    },
     onSuccess: (data, candidateId) => {
       // Forcer un rafraîchissement pour sync avec le serveur
-      refetchCandidates();
+      queryClient.invalidateQueries({ queryKey: ['/api/establishment/candidates'] });
 
-      // Démarrer un timer pour l'annulation
-      const timer = setTimeout(() => {
-        setRecentlyRejected(prev => {
-          const newSet = new Set(prev);
-          newSet.delete(candidateId);
-          return newSet;
-        });
-        refetchCandidates();
-      }, 10000);
+      // Afficher un message informatif
+      const nurseName = data.deletedCandidate?.nurseName || 'le candidat';
+      const missionTitle = data.deletedCandidate?.missionTitle || 'la mission';
 
-      setRejectionTimers(prev => {
-        const newMap = new Map(prev);
-        newMap.set(candidateId, timer);
-        return newMap;
-      });
-
-      // Alerte simple et directe pour démonstration
-      setTimeout(() => {
-        if (confirm("Candidature rejetée ! Vous voyez l'animation rouge dans la liste ?\n\nVoulez-vous annuler ce rejet ?")) {
-          handleUndoReject(candidateId);
-        }
-      }, 500);
-
-      // Toast de confirmation
       toast({
-        title: "Candidature rejetée",
-        description: "L'animation rouge est visible dans la liste des candidats",
+        title: "🗑️ Candidature supprimée",
+        description: `La candidature de ${nurseName} pour ${missionTitle} a été supprimée`,
         variant: "destructive"
       });
     },
-    onError: (error, candidateId) => {
-      // En cas d'erreur, retirer le marquage de rejet
-      setRecentlyRejected(prev => {
-        const newSet = new Set(prev);
-        newSet.delete(candidateId);
-        return newSet;
+    onError: (error: any, candidateId) => {
+      toast({
+        title: "❌ Erreur",
+        description: error.message || "Impossible de supprimer la candidature",
+        variant: "destructive"
       });
-      // Restaurer les données originales
-      refetchCandidates();
     }
   });
 
@@ -892,20 +871,25 @@ export default function Dashboard() {
                                 </Button>
                                 {candidature.status === 'pending' && (
                                   <>
-                                    <Button
-                                      variant="default"
-                                      size="sm"
-                                      onClick={() => handleAcceptCandidate(candidature)}
-                                    >
-                                      Accepter
-                                    </Button>
-                                    <Button
-                                      variant="destructive"
-                                      size="sm"
-                                      onClick={() => handleRejectCandidate(candidature)}
-                                    >
-                                      Rejeter
-                                    </Button>
+                                                                    <Button
+                                  variant="default"
+                                  size="sm"
+                                  onClick={() => handleAcceptCandidate(candidature)}
+                                  className="bg-green-600 hover:bg-green-700"
+                                  disabled={acceptCandidateMutation.isPending}
+                                >
+                                  <CheckCircle className="h-4 w-4 mr-1" />
+                                  {acceptCandidateMutation.isPending ? "..." : "Accepter"}
+                                </Button>
+                                <Button
+                                  variant="destructive"
+                                  size="sm"
+                                  onClick={() => handleRejectCandidate(candidature)}
+                                  disabled={rejectCandidateMutation.isPending}
+                                >
+                                  <XCircle className="h-4 w-4 mr-1" />
+                                  {rejectCandidateMutation.isPending ? "..." : "Supprimer"}
+                                </Button>
                                   </>
                                 )}
                               </div>
@@ -1114,17 +1098,21 @@ export default function Dashboard() {
                                                 size="sm"
                                                 variant="default"
                                                 onClick={() => handleAcceptCandidate(candidature)}
-                                                className="h-8 px-3"
+                                                className="h-8 px-3 bg-green-600 hover:bg-green-700"
+                                                disabled={acceptCandidateMutation.isPending}
                                               >
-                                                Accepter
+                                                <CheckCircle className="h-4 w-4 mr-1" />
+                                                {acceptCandidateMutation.isPending ? "..." : "Accepter"}
                                               </Button>
                                               <Button
                                                 size="sm"
-                                                variant="outline"
+                                                variant="destructive"
                                                 onClick={() => handleRejectCandidate(candidature)}
                                                 className="h-8 px-3"
+                                                disabled={rejectCandidateMutation.isPending}
                                               >
-                                                Rejeter
+                                                <XCircle className="h-4 w-4 mr-1" />
+                                                {rejectCandidateMutation.isPending ? "..." : "Supprimer"}
                                               </Button>
                                             </div>
                                           )}

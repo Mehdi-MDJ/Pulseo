@@ -27,6 +27,7 @@ import {
   invoices,
   absenceForecasts,
   missionTemplates,
+  contracts,
   type User,
   type UpsertUser,
   type NurseProfile,
@@ -49,6 +50,7 @@ import {
   insertMissionTemplateSchema,
 } from "@shared/schema";
 import { isDevelopment } from "../config/environment";
+import { cacheService } from "./cacheService";
 
 /**
  * Interface définissant toutes les opérations de stockage
@@ -117,6 +119,14 @@ export interface IStorage {
   updateTemplate(templateId: number, data: Partial<InsertMissionTemplate>): Promise<MissionTemplate | undefined>;
   deleteTemplate(templateId: number): Promise<boolean>;
   publishTemplateAsMission(templateId: number, establishmentId: number, customData?: Partial<InsertMission>): Promise<Mission>;
+
+  // ==================== OPÉRATIONS CONTRATS ====================
+  createContract(contract: any): Promise<any>;
+  getContract(contractId: string): Promise<any | undefined>;
+  updateContract(contractId: string, contract: any): Promise<any>;
+  getContractsByEstablishment(establishmentId: string): Promise<any[]>;
+  getContractsByNurse(nurseId: string): Promise<any[]>;
+  getApplication(applicationId: string): Promise<any | undefined>;
 }
 
 /**
@@ -380,21 +390,65 @@ export class DatabaseStorage implements IStorage {
 
   async createOrUpdateEstablishmentProfile(profileData: InsertEstablishmentProfile): Promise<EstablishmentProfile> {
     try {
+      // Préparation des données avec gestion des types
+      const preparedData = {
+        ...profileData,
+        // Conversion des arrays en JSON strings si nécessaire
+        specialties: Array.isArray(profileData.specialties)
+          ? JSON.stringify(profileData.specialties)
+          : profileData.specialties,
+        specializations: Array.isArray(profileData.specializations)
+          ? JSON.stringify(profileData.specializations)
+          : profileData.specializations,
+        services: Array.isArray(profileData.services)
+          ? JSON.stringify(profileData.services)
+          : profileData.services,
+        selectedCriteria: Array.isArray(profileData.selectedCriteria)
+          ? JSON.stringify(profileData.selectedCriteria)
+          : profileData.selectedCriteria,
+        customWeights: typeof profileData.customWeights === 'object'
+          ? JSON.stringify(profileData.customWeights)
+          : profileData.customWeights,
+        // Valeurs par défaut pour les champs requis
+        city: profileData.city || 'Non spécifié',
+        postalCode: profileData.postalCode || '00000',
+        type: profileData.type || 'hospital',
+        isActive: profileData.isActive ?? true,
+        isVerified: profileData.isVerified ?? false
+      };
+
       // Validation des données avec Zod
-      const validatedData = insertEstablishmentProfileSchema.parse(profileData);
+      const validatedData = insertEstablishmentProfileSchema.parse(preparedData);
       this.log('createOrUpdateEstablishmentProfile', { userId: validatedData.userId });
+
       const db = await this.getDatabase();
-      const [profile] = await db
-        .insert(establishmentProfiles)
-        .values(validatedData)
-        .onConflictDoUpdate({
-          target: [establishmentProfiles.userId],
-          set: {
+
+      // Vérifier si le profil existe déjà
+      const existingProfile = await db
+        .select()
+        .from(establishmentProfiles)
+        .where(eq(establishmentProfiles.userId, validatedData.userId))
+        .limit(1);
+
+      let profile;
+
+      if (existingProfile.length > 0) {
+        // Mise à jour du profil existant
+        [profile] = await db
+          .update(establishmentProfiles)
+          .set({
             ...validatedData,
             updatedAt: new Date(),
-          },
-        })
-        .returning();
+          })
+          .where(eq(establishmentProfiles.userId, validatedData.userId))
+          .returning();
+      } else {
+        // Création d'un nouveau profil
+        [profile] = await db
+          .insert(establishmentProfiles)
+          .values(validatedData)
+          .returning();
+      }
 
       return profile;
     } catch (error) {
@@ -415,6 +469,9 @@ export class DatabaseStorage implements IStorage {
         .values(validatedData)
         .returning();
 
+      // Invalider le cache des missions
+      cacheService.invalidatePattern('missions:');
+
       return mission;
     } catch (error) {
       this.handleError('createMission', error);
@@ -424,12 +481,17 @@ export class DatabaseStorage implements IStorage {
   async getMission(id: number): Promise<Mission | undefined> {
     try {
       this.log('getMission', { id });
-      const db = await this.getDatabase();
-      const [mission] = await db
-        .select()
-        .from(missions)
-        .where(eq(missions.id, id));
-      return mission || undefined;
+
+      // Cache pour les missions individuelles (TTL: 10 minutes)
+      const cacheKey = `mission:${id}`;
+      return await cacheService.getOrSet(cacheKey, async () => {
+        const db = await this.getDatabase();
+        const [mission] = await db
+          .select()
+          .from(missions)
+          .where(eq(missions.id, id));
+        return mission || undefined;
+      }, 10 * 60 * 1000);
     } catch (error) {
       this.handleError('getMission', error);
     }
@@ -458,14 +520,19 @@ export class DatabaseStorage implements IStorage {
   async getMissionsForEstablishment(establishmentId: number, filters?: MissionFilters): Promise<Mission[]> {
     try {
       this.log('getMissionsForEstablishment', { establishmentId, filters });
-      const db = await this.getDatabase();
-      const results = await db
-        .select()
-        .from(missions)
-        .where(eq(missions.establishmentId, establishmentId))
-        .orderBy(desc(missions.createdAt));
 
-      return results;
+      // Cache pour les missions d'établissement (TTL: 5 minutes)
+      const cacheKey = `missions:establishment:${establishmentId}:${JSON.stringify(filters || {})}`;
+      return await cacheService.getOrSet(cacheKey, async () => {
+        const db = await this.getDatabase();
+        const results = await db
+          .select()
+          .from(missions)
+          .where(eq(missions.establishmentId, establishmentId))
+          .orderBy(desc(missions.createdAt));
+
+        return results;
+      }, 5 * 60 * 1000);
     } catch (error) {
       this.handleError('getMissionsForEstablishment', error);
     }
@@ -483,6 +550,10 @@ export class DatabaseStorage implements IStorage {
         })
         .where(eq(missions.id, missionId))
         .returning();
+
+      // Invalider le cache des missions
+      cacheService.delete(`mission:${missionId}`);
+      cacheService.invalidatePattern('missions:');
 
       return mission || undefined;
     } catch (error) {
@@ -716,13 +787,18 @@ export class DatabaseStorage implements IStorage {
   async getAllMissions(): Promise<Mission[]> {
     try {
       this.log('getAllMissions');
-      const db = await this.getDatabase();
-      const results = await db
-        .select()
-        .from(missions)
-        .orderBy(desc(missions.createdAt));
 
-      return results;
+      // Cache pour toutes les missions (TTL: 3 minutes)
+      const cacheKey = 'missions:all';
+      return await cacheService.getOrSet(cacheKey, async () => {
+        const db = await this.getDatabase();
+        const results = await db
+          .select()
+          .from(missions)
+          .orderBy(desc(missions.createdAt));
+
+        return results;
+      }, 3 * 60 * 1000);
     } catch (error) {
       this.handleError('getAllMissions', error);
     }
@@ -859,7 +935,49 @@ export class DatabaseStorage implements IStorage {
       this.log('acceptCandidate', { candidateId, userId });
       const db = await this.getDatabase();
 
+      // Récupérer la candidature avec les informations de la mission
       const [application] = await db
+        .select({
+          id: missionApplications.id,
+          missionId: missionApplications.missionId,
+          nurseId: missionApplications.nurseId,
+          status: missionApplications.status,
+          coverLetter: missionApplications.coverLetter,
+          createdAt: missionApplications.createdAt,
+          updatedAt: missionApplications.updatedAt,
+          // Informations de la mission
+          missionTitle: missions.title,
+          missionService: missions.service,
+          missionLocation: missions.location,
+          missionStartDate: missions.startDate,
+          missionEndDate: missions.endDate,
+          missionShift: missions.shift,
+          missionHourlyRate: missions.hourlyRate,
+          // Informations de l'infirmier
+          nurseFirstName: nurseProfiles.firstName,
+          nurseLastName: nurseProfiles.lastName,
+          nurseSpecialization: nurseProfiles.specialization,
+          nurseExperience: nurseProfiles.experience,
+          nurseEmail: users.email,
+        })
+        .from(missionApplications)
+        .innerJoin(missions, eq(missionApplications.missionId, missions.id))
+        .innerJoin(nurseProfiles, eq(missionApplications.nurseId, nurseProfiles.id))
+        .innerJoin(users, eq(nurseProfiles.userId, users.id))
+        .where(eq(missionApplications.id, parseInt(candidateId)));
+
+      if (!application) {
+        throw new Error('Candidature non trouvée');
+      }
+
+      // Vérifier que l'utilisateur est bien l'établissement de cette mission
+      const establishment = await this.getEstablishmentProfile(userId);
+      if (!establishment || establishment.id !== application.missionId) {
+        throw new Error('Accès non autorisé à cette candidature');
+      }
+
+      // Mettre à jour le statut de la candidature à "accepted"
+      const [updatedApplication] = await db
         .update(missionApplications)
         .set({
           status: 'accepted',
@@ -868,7 +986,34 @@ export class DatabaseStorage implements IStorage {
         .where(eq(missionApplications.id, parseInt(candidateId)))
         .returning();
 
-      return application;
+      // TODO: Ici on pourrait ajouter le candidat à une table "mission_team"
+      // pour gérer l'équipe de la mission de manière plus structurée
+
+      this.log('Candidature acceptée avec succès', {
+        candidateId,
+        nurseName: `${application.nurseFirstName} ${application.nurseLastName}`,
+        missionTitle: application.missionTitle
+      });
+
+      return {
+        ...updatedApplication,
+        nurseInfo: {
+          firstName: application.nurseFirstName,
+          lastName: application.nurseLastName,
+          specialization: application.nurseSpecialization,
+          experience: application.nurseExperience,
+          email: application.nurseEmail,
+        },
+        missionInfo: {
+          title: application.missionTitle,
+          service: application.missionService,
+          location: application.missionLocation,
+          startDate: application.missionStartDate,
+          endDate: application.missionEndDate,
+          shift: application.missionShift,
+          hourlyRate: application.missionHourlyRate,
+        }
+      };
     } catch (error) {
       this.handleError('acceptCandidate', error);
     }
@@ -879,16 +1024,54 @@ export class DatabaseStorage implements IStorage {
       this.log('rejectCandidate', { candidateId, userId });
       const db = await this.getDatabase();
 
+      // Récupérer la candidature avec les informations de base
       const [application] = await db
-        .update(missionApplications)
-        .set({
-          status: 'rejected',
-          updatedAt: new Date(),
+        .select({
+          id: missionApplications.id,
+          missionId: missionApplications.missionId,
+          nurseId: missionApplications.nurseId,
+          status: missionApplications.status,
+          // Informations de la mission
+          missionTitle: missions.title,
+          // Informations de l'infirmier
+          nurseFirstName: nurseProfiles.firstName,
+          nurseLastName: nurseProfiles.lastName,
         })
-        .where(eq(missionApplications.id, parseInt(candidateId)))
-        .returning();
+        .from(missionApplications)
+        .innerJoin(missions, eq(missionApplications.missionId, missions.id))
+        .innerJoin(nurseProfiles, eq(missionApplications.nurseId, nurseProfiles.id))
+        .where(eq(missionApplications.id, parseInt(candidateId)));
 
-      return application;
+      if (!application) {
+        throw new Error('Candidature non trouvée');
+      }
+
+      // Vérifier que l'utilisateur est bien l'établissement de cette mission
+      const establishment = await this.getEstablishmentProfile(userId);
+      if (!establishment || establishment.id !== application.missionId) {
+        throw new Error('Accès non autorisé à cette candidature');
+      }
+
+      // Supprimer complètement la candidature (pas juste changer le statut)
+      await db
+        .delete(missionApplications)
+        .where(eq(missionApplications.id, parseInt(candidateId)));
+
+      this.log('Candidature supprimée avec succès', {
+        candidateId,
+        nurseName: `${application.nurseFirstName} ${application.nurseLastName}`,
+        missionTitle: application.missionTitle
+      });
+
+      return {
+        success: true,
+        message: 'Candidature supprimée avec succès',
+        deletedCandidate: {
+          id: application.id,
+          nurseName: `${application.nurseFirstName} ${application.nurseLastName}`,
+          missionTitle: application.missionTitle,
+        }
+      };
     } catch (error) {
       this.handleError('rejectCandidate', error);
     }
@@ -1046,6 +1229,171 @@ export class DatabaseStorage implements IStorage {
       return mission;
     } catch (error) {
       this.handleError('publishTemplateAsMission', error);
+    }
+  }
+
+  // ==================== OPÉRATIONS CONTRATS ====================
+
+  async createContract(contract: any): Promise<any> {
+    try {
+      this.log('createContract', contract);
+      const db = await this.getDatabase();
+
+      // Générer un numéro de contrat unique
+      const contractNumber = `CTR-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+
+      const contractData = {
+        id: contract.id, // Utiliser l'ID fourni par le code
+        missionId: parseInt(contract.missionId),
+        nurseId: contract.nurseId,
+        establishmentId: contract.establishmentId,
+        contractNumber,
+        title: `Contrat de mission - ${contract.terms?.location || 'Mission'}`,
+        startDate: new Date(contract.terms.startDate),
+        endDate: new Date(contract.terms.endDate),
+        hourlyRate: contract.terms.hourlyRate,
+        totalHours: 0, // À calculer selon la durée
+        totalAmount: 0, // À calculer selon les heures
+        contractContent: JSON.stringify(contract),
+        status: contract.status || 'generated',
+        legalTerms: JSON.stringify(contract.legalClauses),
+        generatedAt: new Date(),
+        createdAt: new Date(),
+        updatedAt: new Date()
+      };
+
+      const [newContract] = await db
+        .insert(contracts)
+        .values(contractData)
+        .returning();
+
+      return newContract;
+    } catch (error) {
+      this.handleError('createContract', error);
+    }
+  }
+
+  async getContract(contractId: string): Promise<any | undefined> {
+    try {
+      this.log('getContract', { contractId });
+      const db = await this.getDatabase();
+      const [contract] = await db
+        .select()
+        .from(contracts)
+        .where(eq(contracts.id, parseInt(contractId)));
+
+      if (!contract) return undefined;
+
+      // Parser le contenu JSON du contrat
+      try {
+        const parsedContent = JSON.parse(contract.contractContent);
+        return {
+          ...contract,
+          ...parsedContent
+        };
+      } catch {
+        return contract;
+      }
+    } catch (error) {
+      this.handleError('getContract', error);
+    }
+  }
+
+  async updateContract(contractId: string, contract: any): Promise<any> {
+    try {
+      this.log('updateContract', { contractId, contract });
+      const db = await this.getDatabase();
+
+      const updateData: any = {
+        status: contract.status,
+        contractContent: JSON.stringify(contract),
+        updatedAt: new Date()
+      };
+
+      // Mettre à jour les signatures si présentes
+      if (contract.signatures?.nurse) {
+        updateData.nurseSignature = JSON.stringify(contract.signatures.nurse);
+      }
+      if (contract.signatures?.establishment) {
+        updateData.establishmentSignature = JSON.stringify(contract.signatures.establishment);
+      }
+
+      const [updatedContract] = await db
+        .update(contracts)
+        .set(updateData)
+        .where(eq(contracts.id, parseInt(contractId)))
+        .returning();
+
+      return updatedContract;
+    } catch (error) {
+      this.handleError('updateContract', error);
+    }
+  }
+
+  async getContractsByEstablishment(establishmentId: string): Promise<any[]> {
+    try {
+      this.log('getContractsByEstablishment', { establishmentId });
+      const db = await this.getDatabase();
+      const results = await db
+        .select()
+        .from(contracts)
+        .where(eq(contracts.establishmentId, establishmentId))
+        .orderBy(desc(contracts.createdAt));
+
+      return results.map(contract => {
+        try {
+          const parsedContent = JSON.parse(contract.contractContent);
+          return {
+            ...contract,
+            ...parsedContent
+          };
+        } catch {
+          return contract;
+        }
+      });
+    } catch (error) {
+      this.handleError('getContractsByEstablishment', error);
+    }
+  }
+
+  async getContractsByNurse(nurseId: string): Promise<any[]> {
+    try {
+      this.log('getContractsByNurse', { nurseId });
+      const db = await this.getDatabase();
+      const results = await db
+        .select()
+        .from(contracts)
+        .where(eq(contracts.nurseId, nurseId))
+        .orderBy(desc(contracts.createdAt));
+
+      return results.map(contract => {
+        try {
+          const parsedContent = JSON.parse(contract.contractContent);
+          return {
+            ...contract,
+            ...parsedContent
+          };
+        } catch {
+          return contract;
+        }
+      });
+    } catch (error) {
+      this.handleError('getContractsByNurse', error);
+    }
+  }
+
+  async getApplication(applicationId: string): Promise<any | undefined> {
+    try {
+      this.log('getApplication', { applicationId });
+      const db = await this.getDatabase();
+      const [application] = await db
+        .select()
+        .from(missionApplications)
+        .where(eq(missionApplications.id, parseInt(applicationId)));
+
+      return application || undefined;
+    } catch (error) {
+      this.handleError('getApplication', error);
     }
   }
 }

@@ -3,93 +3,53 @@ import {
   View,
   StyleSheet,
   ViewStyle,
+  TouchableOpacity,
 } from 'react-native';
-import { colors } from '../theme/colors';
-import { spacing } from '../theme/spacing';
+import { designSystem, createCardStyle } from '../theme/designSystem';
 
 interface CardProps {
   children: React.ReactNode;
+  variant?: 'default' | 'elevated' | 'outlined';
   style?: ViewStyle;
-  padding?: 'none' | 'small' | 'medium' | 'large';
-  shadow?: 'none' | 'small' | 'medium' | 'large';
-  borderRadius?: 'small' | 'medium' | 'large' | 'full';
+  onPress?: () => void;
+  disabled?: boolean;
+  accessibilityLabel?: string;
+  accessibilityHint?: string;
 }
 
 export default function Card({
   children,
+  variant = 'default',
   style,
-  padding = 'medium',
-  shadow = 'small',
-  borderRadius = 'medium',
+  onPress,
+  disabled = false,
+  accessibilityLabel,
+  accessibilityHint,
 }: CardProps) {
-  const getPadding = (): number => {
-    switch (padding) {
-      case 'none':
-        return 0;
-      case 'small':
-        return spacing.sm;
-      case 'large':
-        return spacing.lg;
-      default:
-        return spacing.md;
-    }
-  };
+  const cardStyle = createCardStyle(variant);
 
-  const getShadow = () => {
-    switch (shadow) {
-      case 'none':
-        return {};
-      case 'medium':
-        return {
-          shadowColor: colors.app.cardShadow,
-          shadowOffset: { width: 0, height: 4 },
-          shadowOpacity: 0.15,
-          shadowRadius: 8,
-          elevation: 6,
-        };
-      case 'large':
-        return {
-          shadowColor: colors.app.cardShadow,
-          shadowOffset: { width: 0, height: 8 },
-          shadowOpacity: 0.2,
-          shadowRadius: 16,
-          elevation: 12,
-        };
-      default:
-        return {
-          shadowColor: colors.app.cardShadow,
-          shadowOffset: { width: 0, height: 2 },
-          shadowOpacity: 0.1,
-          shadowRadius: 4,
-          elevation: 3,
-        };
-    }
-  };
-
-  const getBorderRadius = (): number => {
-    switch (borderRadius) {
-      case 'small':
-        return spacing.borderRadius.sm;
-      case 'large':
-        return spacing.borderRadius.lg;
-      case 'full':
-        return spacing.borderRadius.full;
-      default:
-        return spacing.borderRadius.md;
-    }
-  };
+  if (onPress) {
+    return (
+      <TouchableOpacity
+        style={[cardStyle, style]}
+        onPress={onPress}
+        disabled={disabled}
+        activeOpacity={0.8}
+        accessibilityRole="button"
+        accessibilityLabel={accessibilityLabel}
+        accessibilityHint={accessibilityHint}
+        accessibilityState={{ disabled }}
+      >
+        {children}
+      </TouchableOpacity>
+    );
+  }
 
   return (
     <View
-      style={[
-        styles.card,
-        {
-          padding: getPadding(),
-          borderRadius: getBorderRadius(),
-          ...getShadow(),
-        },
-        style,
-      ]}
+      style={[cardStyle, style]}
+      accessibilityRole="none"
+      accessibilityLabel={accessibilityLabel}
     >
       {children}
     </View>
@@ -98,6 +58,6 @@ export default function Card({
 
 const styles = StyleSheet.create({
   card: {
-    backgroundColor: colors.background.primary,
+    backgroundColor: designSystem.colors.background.primary,
   },
 });

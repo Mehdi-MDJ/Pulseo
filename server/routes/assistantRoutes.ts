@@ -2,14 +2,14 @@
  * ==============================================================================
  * NurseLink AI - Routes Assistant IA Conversationnel
  * ==============================================================================
- * 
+ *
  * API endpoints pour l'assistant IA intelligent
  * ==============================================================================
  */
 
 import { Router } from "express";
 import { z } from "zod";
-import { isAuthenticated } from "../replitAuth";
+import { requireAuth, requireRole } from "../middleware/authMiddleware";
 import { aiAssistantService } from "../services/aiAssistantService";
 
 const router = Router();
@@ -32,7 +32,7 @@ const negotiationSchema = z.object({
 /**
  * Traitement d'un message utilisateur
  */
-router.post("/chat", isAuthenticated, async (req: any, res) => {
+router.post("/chat", requireAuth, async (req: any, res) => {
   try {
     const { message } = messageSchema.parse(req.body);
     const userId = req.user.claims.sub;
@@ -42,7 +42,7 @@ router.post("/chat", isAuthenticated, async (req: any, res) => {
     res.json(response);
   } catch (error) {
     console.error("Erreur chat assistant:", error);
-    res.status(500).json({ 
+    res.status(500).json({
       message: "Erreur lors du traitement du message",
       error: error instanceof Error ? error.message : "Erreur inconnue"
     });
@@ -52,7 +52,7 @@ router.post("/chat", isAuthenticated, async (req: any, res) => {
 /**
  * Recommandations de missions personnalisées
  */
-router.get("/recommendations/missions", isAuthenticated, async (req: any, res) => {
+router.get("/recommendations/missions", requireAuth, async (req: any, res) => {
   try {
     const userId = req.user.claims.sub;
     const filters = req.query;
@@ -66,8 +66,8 @@ router.get("/recommendations/missions", isAuthenticated, async (req: any, res) =
     });
   } catch (error) {
     console.error("Erreur recommandations missions:", error);
-    res.status(500).json({ 
-      message: "Erreur lors de la génération des recommandations" 
+    res.status(500).json({
+      message: "Erreur lors de la génération des recommandations"
     });
   }
 });
@@ -75,7 +75,7 @@ router.get("/recommendations/missions", isAuthenticated, async (req: any, res) =
 /**
  * Négociation automatique de tarifs
  */
-router.post("/negotiate", isAuthenticated, async (req: any, res) => {
+router.post("/negotiate", requireAuth, async (req: any, res) => {
   try {
     const { missionId, proposedRate } = negotiationSchema.parse(req.body);
     const userId = req.user.claims.sub;
@@ -85,8 +85,8 @@ router.post("/negotiate", isAuthenticated, async (req: any, res) => {
     res.json(result);
   } catch (error) {
     console.error("Erreur négociation:", error);
-    res.status(500).json({ 
-      message: "Erreur lors de la négociation" 
+    res.status(500).json({
+      message: "Erreur lors de la négociation"
     });
   }
 });
@@ -94,7 +94,7 @@ router.post("/negotiate", isAuthenticated, async (req: any, res) => {
 /**
  * Planification de carrière personnalisée
  */
-router.get("/career-plan", isAuthenticated, async (req: any, res) => {
+router.get("/career-plan", requireAuth, async (req: any, res) => {
   try {
     const userId = req.user.claims.sub;
 
@@ -106,8 +106,8 @@ router.get("/career-plan", isAuthenticated, async (req: any, res) => {
     });
   } catch (error) {
     console.error("Erreur planification carrière:", error);
-    res.status(500).json({ 
-      message: "Erreur lors de la planification de carrière" 
+    res.status(500).json({
+      message: "Erreur lors de la planification de carrière"
     });
   }
 });
@@ -115,10 +115,10 @@ router.get("/career-plan", isAuthenticated, async (req: any, res) => {
 /**
  * Historique des conversations
  */
-router.get("/conversations", isAuthenticated, async (req: any, res) => {
+router.get("/conversations", requireAuth, async (req: any, res) => {
   try {
     const userId = req.user.claims.sub;
-    
+
     // Pour l'instant, retourne un historique basique
     // À implémenter avec stockage en base de données
     res.json({
@@ -134,8 +134,8 @@ router.get("/conversations", isAuthenticated, async (req: any, res) => {
     });
   } catch (error) {
     console.error("Erreur historique conversations:", error);
-    res.status(500).json({ 
-      message: "Erreur lors de la récupération de l'historique" 
+    res.status(500).json({
+      message: "Erreur lors de la récupération de l'historique"
     });
   }
 });

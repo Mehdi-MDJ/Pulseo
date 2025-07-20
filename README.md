@@ -1,135 +1,98 @@
-# NurseLink AI - Plateforme de Recrutement Intelligent
+# 🏥 NurseLink AI
 
-## Vue d'ensemble
-NurseLink AI révolutionne le recrutement médical en connectant intelligemment les infirmiers aux établissements de santé. Notre plateforme utilise l'intelligence artificielle pour optimiser les correspondances et automatiser les processus administratifs.
+Plateforme de matching intelligent entre infirmiers et établissements de santé.
 
-## Fonctionnalités principales
-
-### 🤖 Matching intelligent par IA
-- Algorithme de scoring basé sur compétences, localisation et disponibilités
-- Prévisions d'absences pour anticipation des besoins
-- Recommandations personnalisées
-
-### 📄 Contrats automatiques (Innovation majeure)
-- Génération instantanée lors de l'acceptation de candidatures
-- Templates HTML professionnels via OpenAI GPT-4o
-- Calculs financiers automatiques (salaire, charges, net à payer)
-- Signature électronique intégrée
-
-### 🔐 Authentification sécurisée
-- OAuth via Replit pour sécurité maximale
-- Gestion des rôles (infirmier/établissement)
-- Sessions sécurisées en base de données
-
-### 📱 Interface multiplateforme
-- Application web responsive
-- Application mobile React Native
-- Design mobile-first optimisé
-
-## Installation
+## 🚀 Démarrage Rapide
 
 ### Prérequis
 - Node.js 18+
-- PostgreSQL
-- Clé API OpenAI
+- npm ou yarn
 
-### Configuration
-1. Cloner le repository
-2. Installer les dépendances: `npm install`
-3. Configurer les variables d'environnement:
+### Installation
+```bash
+npm install
+```
+
+### Démarrage du serveur
+```bash
+npm run dev
+```
+
+Le serveur sera accessible sur `http://localhost:3000`
+
+### Interface Web
+L'interface web est automatiquement servie sur `http://localhost:3000`
+
+## 📁 Structure du Projet
+
+```
+NurseLinkAI_Test/
+├── client/                 # Interface web React
+├── server/                 # API backend Express
+├── mobile/                 # Application mobile React Native
+├── shared/                 # Schémas partagés
+└── migrations/             # Migrations base de données
+```
+
+## 🔧 Configuration
+
+### Variables d'environnement
+Créez un fichier `.env` à la racine :
+
 ```env
-DATABASE_URL=postgresql://...
-OPENAI_API_KEY=sk-...
-SESSION_SECRET=your-session-secret
-REPL_ID=your-replit-id
-```
-4. Mettre à jour la base de données: `npm run db:push`
-5. Lancer l'application: `npm run dev`
-
-## Architecture technique
-
-### Stack technologique
-- **Frontend**: React 18 + TypeScript + Tailwind CSS + shadcn/ui
-- **Backend**: Node.js + Express + Drizzle ORM
-- **Base de données**: PostgreSQL
-- **IA**: OpenAI GPT-4o
-- **Mobile**: React Native Expo
-
-### Structure du projet
-```
-├── client/          # Frontend React
-├── server/          # Backend Node.js
-├── shared/          # Code partagé (schémas DB)
-├── mobile/          # Application mobile
-└── docs/            # Documentation
+NODE_ENV=development
+PORT=3000
+DATABASE_URL=file:./dev.db
 ```
 
-## Démonstration
+## 📊 Base de Données
 
-### Système de contrats automatiques
-Accéder à `/contract-demo` pour voir le processus complet:
-1. Création d'une mission par un établissement
-2. Candidature automatique d'un infirmier
-3. Acceptation de la candidature
-4. Génération instantanée du contrat professionnel
+La base de données SQLite est automatiquement créée au premier démarrage.
 
-### Exemple de contrat généré
-- **Mission**: Infirmier de nuit - Service Urgences
-- **Établissement**: CHU Lyon Sud  
-- **Tarif horaire**: 28€
-- **Durée**: 7 jours × 12h = 84h
-- **Salaire total**: 2 352€
-- **Charges sociales**: 541€ (23%)
-- **Net à payer**: 1 811€
+### Migrations
+```bash
+npm run db:push
+```
 
-## Avantages concurrentiels
+## 🧪 Tests
 
-1. **Automatisation complète** - Zéro paperasse manuelle
-2. **IA générative** - Contrats uniques et professionnels
-3. **Instantané** - Contrat disponible immédiatement après acceptation
-4. **Conformité garantie** - Clauses légales à jour automatiquement
-5. **Traçabilité totale** - Audit trail complet
-6. **Mobile-first** - Accessibilité maximale
+Les tests ont été simplifiés pour se concentrer sur les fonctionnalités principales.
 
-## Fonctionnalités futures recommandées
+## 📱 Application Mobile
 
-### Phase 1 (Court terme)
-- Assistant IA conversationnel pour accompagnement personnalisé
-- Analytics prédictives pour optimisation RH des établissements
+L'application mobile React Native est dans le dossier `mobile/`.
 
-### Phase 2 (Moyen terme)  
-- Marketplace de formations certifiantes intégrée
-- Système de réputation blockchain pour confiance totale
+```bash
+cd mobile
+npm install
+npx expo start
+```
 
-### Phase 3 (Long terme)
-- Réseau social professionnel médical spécialisé
-- Intégration ERP pour facturation automatique
+## 🔒 Authentification
 
-## Sécurité et conformité
+Le système supporte :
+- Authentification locale (développement)
+- OAuth Replit (production)
 
-- **RGPD** - Gestion conforme des données personnelles
-- **Code du travail** - Contrats conformes à la législation
-- **Sécurité** - Chiffrement et authentification renforcée
-- **Audit** - Traçabilité complète des opérations
+## 📈 Fonctionnalités
 
-## Support et documentation
+- ✅ Inscription/Connexion établissements
+- ✅ Création et gestion de missions
+- ✅ Templates de missions
+- ✅ Matching IA intelligent
+- ✅ Gestion des candidatures
+- ✅ Notifications en temps réel
+- ✅ Interface mobile
 
-- **Guide développeur**: `DEVELOPER_GUIDE.md`
-- **Architecture**: `ARCHITECTURE.md`
-- **Système de contrats**: `CONTRACTS_SYSTEM.md`
-- **Roadmap**: `FEATURES_ROADMAP.md`
+## 🛠️ Développement
 
-## Métriques de performance
+### Scripts disponibles
+- `npm run dev` - Démarrage en mode développement
+- `npm run build` - Compilation TypeScript
+- `npm run start` - Démarrage en production
+- `npm run lint` - Vérification du code
+- `npm run type-check` - Vérification des types
 
-- **Réduction délais de recrutement**: -60%
-- **Satisfaction utilisateurs**: >90% (objectif)
-- **Rétention infirmiers**: +45% (objectif)
-- **Économies établissements**: 25% des coûts RH (objectif)
+## 📄 Licence
 
-## Contact et contribution
-
-NurseLink AI représente l'avenir du recrutement médical, combinant intelligence artificielle et automatisation pour créer une expérience utilisateur exceptionnelle tout en réduisant drastiquement les coûts administratifs.
-
----
-
-*Développé avec ❤️ pour révolutionner le secteur de la santé*# Pulseo
+MIT

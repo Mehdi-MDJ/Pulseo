@@ -1,225 +1,215 @@
 /**
  * ==============================================================================
- * NurseLink AI - Routes d'Authentification
+ * NurseLink AI - Routes d'Authentification NextAuth.js v5
  * ==============================================================================
  *
- * Routes dédiées à l'authentification et gestion des utilisateurs
- * Utilise le service d'authentification modulaire
+ * Routes d'authentification pour NextAuth.js v5
+ * Gestion des sessions, connexion, déconnexion, etc.
  * ==============================================================================
  */
 
-import { Router } from "express";
-import { requireAuthentication, getUserFromRequest } from "../services/authService";
-import { storage } from "../services/storageService";
-import { z } from "zod";
-import bcrypt from "bcryptjs";
-import jwt from "jsonwebtoken";
+import { Router } from "express"
+import { handlers } from "../lib/auth"
 
-const router = Router();
+const router = Router()
 
-/**
- * Schéma de validation pour l'inscription
- */
-const registerSchema = z.object({
-  email: z.string().email("Email invalide"),
-  password: z.string().min(6, "Le mot de passe doit contenir au moins 6 caractères"),
-  firstName: z.string().min(2, "Le prénom doit contenir au moins 2 caractères"),
-  lastName: z.string().min(2, "Le nom doit contenir au moins 2 caractères"),
-  role: z.enum(["nurse", "establishment"]),
-  // Champs optionnels pour les établissements
-  establishmentName: z.string().optional(),
-  establishmentType: z.string().optional(),
-  siretNumber: z.string().optional(),
-  address: z.string().optional(),
-  contactPhone: z.string().optional(),
-});
-
-/**
- * Schéma de validation pour l'acceptation des CGU
- */
-const acceptCGUSchema = z.object({
-  role: z.enum(["nurse", "establishment"]),
-});
-
-/**
- * Route d'inscription
- */
-router.post("/register", async (req, res) => {
+// Route pour récupérer la session utilisateur
+router.get("/session", async (req, res) => {
   try {
-    // Validation des données
-    const validatedData = registerSchema.parse(req.body);
-
-    // Vérifier si l'email existe déjà
-    const existingUser = await storage.getUserByEmail(validatedData.email);
-    if (existingUser) {
-      return res.status(409).json({
-        error: "Un compte avec cet email existe déjà",
-        code: "EMAIL_ALREADY_EXISTS"
-      });
-    }
-
-    // Vérifier l'unicité du SIRET si fourni pour un établissement
-    if (validatedData.role === "establishment" && validatedData.siretNumber) {
-      const existingEstablishment = await storage.getEstablishmentBySiret(validatedData.siretNumber);
-      if (existingEstablishment) {
-        return res.status(409).json({
-          error: "Un établissement avec ce numéro SIRET existe déjà",
-          code: "SIRET_ALREADY_EXISTS"
-        });
-      }
-    }
-
-    // Hasher le mot de passe
-    const hashedPassword = await bcrypt.hash(validatedData.password, 12);
-
-    // Créer l'utilisateur
-    const userData = {
-      email: validatedData.email,
-      password: hashedPassword,
-      firstName: validatedData.firstName,
-      lastName: validatedData.lastName,
-      role: validatedData.role,
-      cguAccepted: false, // Sera mis à true lors de l'acceptation des CGU
-    };
-
-    const newUser = await storage.createUser(userData);
-
-    // Si c'est un établissement, créer le profil établissement
-    if (validatedData.role === "establishment" && (
-      validatedData.establishmentName ||
-      validatedData.establishmentType ||
-      validatedData.siretNumber
-    )) {
-      const establishmentProfile = {
-        userId: newUser.id,
-        name: validatedData.establishmentName || `${validatedData.firstName} ${validatedData.lastName}`,
-        type: validatedData.establishmentType || "Non spécifié",
-        siret: validatedData.siretNumber || "",
-        address: validatedData.address || "",
-        phone: validatedData.contactPhone || "",
-        contactPerson: `${validatedData.firstName} ${validatedData.lastName}`,
-        email: validatedData.email,
-      };
-
-      await storage.createOrUpdateEstablishmentProfile(establishmentProfile);
-    }
-
-    // Générer le token de session
-    const sessionToken = jwt.sign(
-      { userId: newUser.id, role: newUser.role },
-      process.env.JWT_SECRET || "fallback-secret",
-      { expiresIn: "7d" }
-    );
-
-    // Retourner la réponse sans le mot de passe
-    const { password, ...userWithoutPassword } = newUser;
-
-    res.status(201).json({
-      message: "Inscription réussie",
-      user: userWithoutPassword,
-      sessionToken,
-    });
-
+    const session = await handlers.GET(req, res)
+    res.json(session)
   } catch (error) {
-    if (error instanceof z.ZodError) {
-      return res.status(400).json({
-        error: "Données invalides",
-        code: "VALIDATION_ERROR",
-        details: error.errors,
-      });
-    }
-
-    console.error("Erreur inscription:", error);
-    res.status(500).json({
-      error: "Erreur serveur lors de l'inscription",
-      code: "INTERNAL_ERROR"
-    });
+    console.error("Erreur récupération session:", error)
+    res.status(500).json({ error: "Erreur serveur" })
   }
-});
+})
 
-/**
- * Route pour récupérer les informations de l'utilisateur connecté
- */
-router.get("/user", requireAuthentication, async (req: any, res) => {
+// Route pour la connexion
+router.post("/signin", async (req, res) => {
   try {
-    const userInfo = getUserFromRequest(req);
-    if (!userInfo) {
+    const result = await handlers.POST(req, res)
+    res.json(result)
+  } catch (error) {
+    console.error("Erreur connexion:", error)
+    res.status(500).json({ error: "Erreur de connexion" })
+  }
+})
+
+// Route pour la déconnexion
+router.post("/signout", async (req, res) => {
+  try {
+    const result = await handlers.POST(req, res)
+    res.json(result)
+  } catch (error) {
+    console.error("Erreur déconnexion:", error)
+    res.status(500).json({ error: "Erreur de déconnexion" })
+  }
+})
+
+// Route pour récupérer l'utilisateur connecté
+router.get("/user", async (req, res) => {
+  try {
+    const session = await handlers.GET(req, res)
+
+    if (!session?.user) {
       return res.status(401).json({
-        error: "Utilisateur non authentifié",
+        error: "Non authentifié",
         code: "UNAUTHORIZED"
-      });
+      })
     }
 
-    const user = await storage.getUser(userInfo.userId);
+    // Récupérer les informations complètes de l'utilisateur
+    const { prisma } = await import("../lib/prisma")
+    const user = await prisma.user.findUnique({
+      where: { id: session.user.id },
+      include: {
+        nurseProfile: true,
+        establishmentProfile: true,
+      }
+    })
+
     if (!user) {
       return res.status(404).json({
         error: "Utilisateur non trouvé",
         code: "USER_NOT_FOUND"
-      });
+      })
     }
-
-    // Ne pas retourner le mot de passe
-    const { password, ...userWithoutPassword } = user;
-    res.json(userWithoutPassword);
-  } catch (error) {
-    console.error("Erreur récupération utilisateur:", error);
-    res.status(500).json({
-      error: "Erreur serveur",
-      code: "INTERNAL_ERROR"
-    });
-  }
-});
-
-/**
- * Route pour accepter les CGU et définir le rôle
- */
-router.post("/accept-cgu", requireAuthentication, async (req: any, res) => {
-  try {
-    const userInfo = getUserFromRequest(req);
-    if (!userInfo) {
-      return res.status(401).json({
-        error: "Utilisateur non authentifié",
-        code: "UNAUTHORIZED"
-      });
-    }
-
-    // Validation des données
-    const { role } = acceptCGUSchema.parse(req.body);
-
-    // Mise à jour de l'utilisateur
-    const updatedUser = await storage.acceptCGU(userInfo.userId, role);
 
     res.json({
-      message: "CGU acceptées avec succès",
-      user: updatedUser,
-    });
+      id: user.id,
+      email: user.email,
+      name: user.name,
+      role: user.role,
+      image: user.image,
+      nurseProfile: user.nurseProfile,
+      establishmentProfile: user.establishmentProfile,
+    })
   } catch (error) {
-    if (error instanceof z.ZodError) {
-      return res.status(400).json({
-        error: "Données invalides",
-        code: "VALIDATION_ERROR",
-        details: error.errors,
-      });
-    }
-
-    console.error("Erreur acceptation CGU:", error);
+    console.error("Erreur récupération utilisateur:", error)
     res.status(500).json({
       error: "Erreur serveur",
       code: "INTERNAL_ERROR"
-    });
+    })
   }
-});
+})
 
-/**
- * Route de vérification du statut d'authentification
- */
-router.get("/status", (req, res) => {
-  const userInfo = getUserFromRequest(req);
+// Route pour mettre à jour le profil utilisateur
+router.put("/user", async (req, res) => {
+  try {
+    const session = await handlers.GET(req, res)
 
-  res.json({
-    authenticated: !!userInfo,
-    userId: userInfo?.userId || null,
-  });
-});
+    if (!session?.user) {
+      return res.status(401).json({
+        error: "Non authentifié",
+        code: "UNAUTHORIZED"
+      })
+    }
 
-export default router;
+    const { name, role } = req.body
+    const { prisma } = await import("../lib/prisma")
+
+    const updatedUser = await prisma.user.update({
+      where: { id: session.user.id },
+      data: {
+        name: name || undefined,
+        role: role || undefined,
+      },
+      include: {
+        nurseProfile: true,
+        establishmentProfile: true,
+      }
+    })
+
+    res.json({
+      id: updatedUser.id,
+      email: updatedUser.email,
+      name: updatedUser.name,
+      role: updatedUser.role,
+      image: updatedUser.image,
+      nurseProfile: updatedUser.nurseProfile,
+      establishmentProfile: updatedUser.establishmentProfile,
+    })
+  } catch (error) {
+    console.error("Erreur mise à jour utilisateur:", error)
+    res.status(500).json({
+      error: "Erreur serveur",
+      code: "INTERNAL_ERROR"
+    })
+  }
+})
+
+// Route pour créer un profil infirmier
+router.post("/nurse-profile", async (req, res) => {
+  try {
+    const session = await handlers.GET(req, res)
+
+    if (!session?.user) {
+      return res.status(401).json({
+        error: "Non authentifié",
+        code: "UNAUTHORIZED"
+      })
+    }
+
+    const { specializations, experience, certifications, availability, hourlyRate } = req.body
+    const { prisma } = await import("../lib/prisma")
+
+    const nurseProfile = await prisma.nurseProfile.create({
+      data: {
+        userId: session.user.id,
+        specializations: specializations || [],
+        experience: experience || 0,
+        certifications: certifications || [],
+        availability: availability || null,
+        hourlyRate: hourlyRate || null,
+      }
+    })
+
+    res.json(nurseProfile)
+  } catch (error) {
+    console.error("Erreur création profil infirmier:", error)
+    res.status(500).json({
+      error: "Erreur serveur",
+      code: "INTERNAL_ERROR"
+    })
+  }
+})
+
+// Route pour créer un profil établissement
+router.post("/establishment-profile", async (req, res) => {
+  try {
+    const session = await handlers.GET(req, res)
+
+    if (!session?.user) {
+      return res.status(401).json({
+        error: "Non authentifié",
+        code: "UNAUTHORIZED"
+      })
+    }
+
+    const { name, type, address, phone, specialties, capacity, description } = req.body
+    const { prisma } = await import("../lib/prisma")
+
+    const establishmentProfile = await prisma.establishmentProfile.create({
+      data: {
+        userId: session.user.id,
+        name,
+        type,
+        address,
+        phone,
+        specialties: specialties || [],
+        capacity,
+        description,
+      }
+    })
+
+    res.json(establishmentProfile)
+  } catch (error) {
+    console.error("Erreur création profil établissement:", error)
+    res.status(500).json({
+      error: "Erreur serveur",
+      code: "INTERNAL_ERROR"
+    })
+  }
+})
+
+export default router

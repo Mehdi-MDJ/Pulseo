@@ -41,6 +41,10 @@ class RateLimiter {
       maxRetriesPerRequest: 3,
     });
 
+    // Mode développement : réduire ou désactiver le rate limiting
+    const isDevelopment = process.env.NODE_ENV === 'development';
+    const rateLimitMultiplier = isDevelopment ? 100 : 1; // 100x plus permissif en dev
+
     // Configuration des règles de rate limiting
     this.rules = [
       // Règles générales
@@ -48,7 +52,7 @@ class RateLimiter {
         path: '/api/auth',
         config: {
           windowMs: 15 * 60 * 1000, // 15 minutes
-          maxRequests: 5,
+          maxRequests: 20 * rateLimitMultiplier, // ✅ Augmenté de 5 à 20
           skipSuccessfulRequests: false,
           skipFailedRequests: false,
         }
@@ -58,7 +62,7 @@ class RateLimiter {
         method: 'POST',
         config: {
           windowMs: 15 * 60 * 1000, // 15 minutes
-          maxRequests: 3,
+          maxRequests: 15 * rateLimitMultiplier, // ✅ Augmenté de 3 à 15
           skipSuccessfulRequests: true,
           skipFailedRequests: false,
         }
@@ -68,7 +72,7 @@ class RateLimiter {
         method: 'POST',
         config: {
           windowMs: 60 * 60 * 1000, // 1 heure
-          maxRequests: 2,
+          maxRequests: 5 * rateLimitMultiplier, // ✅ Augmenté de 2 à 5
           skipSuccessfulRequests: true,
           skipFailedRequests: false,
         }
@@ -78,7 +82,7 @@ class RateLimiter {
         path: '/api/missions',
         config: {
           windowMs: 60 * 1000, // 1 minute
-          maxRequests: 30,
+          maxRequests: 50 * rateLimitMultiplier, // ✅ Augmenté de 30 à 50
           skipSuccessfulRequests: false,
           skipFailedRequests: true,
         }
@@ -88,7 +92,7 @@ class RateLimiter {
         method: 'POST',
         config: {
           windowMs: 60 * 1000, // 1 minute
-          maxRequests: 10,
+          maxRequests: 20 * rateLimitMultiplier, // ✅ Augmenté de 10 à 20
           skipSuccessfulRequests: false,
           skipFailedRequests: true,
         }
@@ -98,7 +102,7 @@ class RateLimiter {
         path: '/api/establishments',
         config: {
           windowMs: 60 * 1000, // 1 minute
-          maxRequests: 20,
+          maxRequests: 30 * rateLimitMultiplier, // ✅ Augmenté de 20 à 30
           skipSuccessfulRequests: false,
           skipFailedRequests: true,
         }
@@ -108,7 +112,7 @@ class RateLimiter {
         path: '/api/ai',
         config: {
           windowMs: 60 * 1000, // 1 minute
-          maxRequests: 5,
+          maxRequests: 10 * rateLimitMultiplier, // ✅ Augmenté de 5 à 10
           skipSuccessfulRequests: false,
           skipFailedRequests: true,
         }
@@ -118,12 +122,17 @@ class RateLimiter {
         path: '/api/analytics',
         config: {
           windowMs: 60 * 1000, // 1 minute
-          maxRequests: 15,
+          maxRequests: 25 * rateLimitMultiplier, // ✅ Augmenté de 15 à 25
           skipSuccessfulRequests: false,
           skipFailedRequests: true,
         }
       }
     ];
+
+    // Log de la configuration en développement
+    if (isDevelopment) {
+      console.log(`🚀 [RateLimiter] Mode développement activé - Multiplicateur: ${rateLimitMultiplier}x`);
+    }
   }
 
   /**

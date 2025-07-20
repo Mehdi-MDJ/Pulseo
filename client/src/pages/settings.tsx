@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useAuth } from "../hooks/useAuth-simple";
+import { useAuth } from "../hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -9,9 +9,9 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { 
-  Settings, 
-  Building, 
+import {
+  Settings,
+  Building,
   Bell,
   Shield,
   Users,
@@ -51,7 +51,7 @@ export default function SettingsPage() {
   const handleThemeChange = (newTheme: string) => {
     setTheme(newTheme);
     localStorage.setItem("theme", newTheme);
-    
+
     // Appliquer le thème immédiatement
     if (newTheme === "dark") {
       document.documentElement.classList.add("dark");
@@ -67,7 +67,7 @@ export default function SettingsPage() {
       }
     }
   };
-  
+
   // États pour les différentes sections
   const [establishmentInfo, setEstablishmentInfo] = useState({
     name: "Hôpital Saint-Vincent",
@@ -292,9 +292,9 @@ export default function SettingsPage() {
               <CardContent className="space-y-6">
                 <div className="space-y-4">
                   <h3 className="font-semibold">Thème</h3>
-                  
+
                   <div className="grid grid-cols-3 gap-4">
-                    <Card 
+                    <Card
                       className={`p-4 cursor-pointer border-2 ${theme === 'light' ? 'border-blue-500 bg-blue-50' : 'border-gray-200'}`}
                       onClick={() => handleThemeChange('light')}
                     >
@@ -305,7 +305,7 @@ export default function SettingsPage() {
                       </div>
                     </Card>
 
-                    <Card 
+                    <Card
                       className={`p-4 cursor-pointer border-2 ${theme === 'dark' ? 'border-blue-500 bg-blue-50' : 'border-gray-200'}`}
                       onClick={() => handleThemeChange('dark')}
                     >
@@ -316,7 +316,7 @@ export default function SettingsPage() {
                       </div>
                     </Card>
 
-                    <Card 
+                    <Card
                       className={`p-4 cursor-pointer border-2 ${theme === 'auto' ? 'border-blue-500 bg-blue-50' : 'border-gray-200'}`}
                       onClick={() => handleThemeChange('auto')}
                     >
@@ -339,7 +339,7 @@ export default function SettingsPage() {
 
                 <div className="space-y-4">
                   <h3 className="font-semibold">Affichage</h3>
-                  
+
                   <div className="space-y-3">
                     <div className="flex items-center justify-between">
                       <div className="space-y-0.5">
@@ -390,7 +390,7 @@ export default function SettingsPage() {
                     <Mail className="h-4 w-4" />
                     <span>Notifications Email</span>
                   </h3>
-                  
+
                   <div className="space-y-3">
                     <div className="flex items-center justify-between">
                       <div className="space-y-0.5">
@@ -434,7 +434,7 @@ export default function SettingsPage() {
                     <Smartphone className="h-4 w-4" />
                     <span>Notifications SMS</span>
                   </h3>
-                  
+
                   <div className="space-y-3">
                     <div className="flex items-center justify-between">
                       <div className="space-y-0.5">
@@ -481,7 +481,7 @@ export default function SettingsPage() {
                 <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
                   <h3 className="font-semibold text-blue-800 mb-2">Système Hybride Déterministe</h3>
                   <p className="text-sm text-blue-600">
-                    Algorithme 8-critères totalement transparent et explicable, sans IA externe. 
+                    Algorithme 8-critères totalement transparent et explicable, sans IA externe.
                     Matching basé sur des règles métier précises et pondérations configurables.
                   </p>
                 </div>
@@ -530,7 +530,7 @@ export default function SettingsPage() {
                     <p className="text-sm text-muted-foreground">
                       Répartissez les 30% restants selon vos priorités d'établissement :
                     </p>
-                    
+
                     <div className="grid grid-cols-2 gap-6">
                       <div className="space-y-2">
                         <Label>5. Disponibilité horaire</Label>
@@ -606,7 +606,7 @@ export default function SettingsPage() {
 
                 <div className="space-y-4">
                   <h3 className="font-semibold">Seuils de Filtrage</h3>
-                  
+
                   <div className="grid grid-cols-2 gap-6">
                     <div className="space-y-2">
                       <Label htmlFor="minScore">Score minimum requis</Label>
@@ -642,7 +642,7 @@ export default function SettingsPage() {
 
                 <div className="space-y-3">
                   <h3 className="font-semibold">Options Avancées</h3>
-                  
+
                   <div className="flex items-center justify-between">
                     <Label>Exclure les candidats indisponibles</Label>
                     <Switch
@@ -838,7 +838,7 @@ export default function SettingsPage() {
               <CardContent className="space-y-6">
                 <div className="space-y-4">
                   <h3 className="font-semibold">Gestion des données</h3>
-                  
+
                   <div className="flex space-x-4">
                     <Button variant="outline" onClick={handleExportData}>
                       <Download className="h-4 w-4 mr-2" />
@@ -855,7 +855,7 @@ export default function SettingsPage() {
 
                 <div className="space-y-4">
                   <h3 className="font-semibold">Intégrations</h3>
-                  
+
                   <div className="grid grid-cols-2 gap-4">
                     <Card className="p-4">
                       <div className="flex justify-between items-center">
@@ -866,7 +866,7 @@ export default function SettingsPage() {
                         <Badge variant="secondary">Configuré</Badge>
                       </div>
                     </Card>
-                    
+
                     <Card className="p-4">
                       <div className="flex justify-between items-center">
                         <div>
@@ -886,7 +886,7 @@ export default function SettingsPage() {
                     <AlertTriangle className="h-4 w-4" />
                     <span>Zone dangereuse</span>
                   </h3>
-                  
+
                   <div className="bg-red-50 p-4 rounded-lg border border-red-200">
                     <div className="space-y-2">
                       <h4 className="font-medium text-red-800">Supprimer le compte</h4>
@@ -894,8 +894,8 @@ export default function SettingsPage() {
                         Cette action supprimera définitivement votre compte et toutes les données associées.
                         Cette action est irréversible.
                       </p>
-                      <Button 
-                        variant="destructive" 
+                      <Button
+                        variant="destructive"
                         onClick={handleDeleteAccount}
                         className="mt-2"
                       >

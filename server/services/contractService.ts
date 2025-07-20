@@ -1,490 +1,382 @@
-/**
- * ==============================================================================
- * NurseLink AI - Service de Génération de Contrats
- * ==============================================================================
- *
- * Service automatisé pour la génération, envoi et signature de contrats
- * Déclenché automatiquement lors de l'acceptation d'une candidature
- *
- * Fonctionnalités :
- * - Génération automatique de contrats à partir de templates
- * - Substitution de variables dynamiques
- * - Génération de PDF
- * - Système de signature électronique
- * - Notifications automatiques
- * - Suivi des statuts
- * ==============================================================================
- */
+import { storage } from './storageService';
+import { logger } from './loggerService';
+import { z } from 'zod';
 
-import { getDb } from '../db';
-import {
-  contracts,
-  contractTemplates,
-  missions,
-  missionApplications,
-  users,
-  nurseProfiles,
-  establishmentProfiles,
-  type Contract,
-  type ContractTemplate,
-  type Mission,
-  type User,
-  type NurseProfile,
-  type EstablishmentProfile
-} from '@shared/schema';
-import { eq, and } from 'drizzle-orm';
-import OpenAI from 'openai';
+// Schémas de validation pour les contrats
+const ContractSchema = z.object({
+  missionId: z.string(),
+  nurseId: z.string(),
+  establishmentId: z.string(),
+  terms: z.object({
+    hourlyRate: z.number().positive(),
+    startDate: z.string(),
+    endDate: z.string(),
+    shift: z.enum(['day', 'night', 'mixed']),
+    location: z.string(),
+    responsibilities: z.array(z.string()),
+    requirements: z.array(z.string())
+  }),
+  legalClauses: z.object({
+    confidentiality: z.boolean(),
+    insurance: z.boolean(),
+    compliance: z.boolean()
+  })
+});
 
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-
-interface ContractGenerationData {
-  mission: Mission;
-  nurse: User;
-  nurseProfile: NurseProfile;
-  establishment: User;
-  establishmentProfile: EstablishmentProfile;
-  application: any;
+// Types pour les contrats
+export interface ContractData {
+  id: string;
+  missionId: string;
+  nurseId: string;
+  establishmentId: string;
+  status: 'draft' | 'sent' | 'signed_nurse' | 'signed_establishment' | 'completed' | 'cancelled';
+  terms: {
+    hourlyRate: number;
+    startDate: string;
+    endDate: string;
+    shift: 'day' | 'night' | 'mixed';
+    location: string;
+    responsibilities: string[];
+    requirements: string[];
+  };
+  legalClauses: {
+    confidentiality: boolean;
+    insurance: boolean;
+    compliance: boolean;
+  };
+  signatures: {
+    nurse?: {
+      date: string;
+      ip: string;
+      userAgent: string;
+      consent: boolean;
+    };
+    establishment?: {
+      date: string;
+      ip: string;
+      userAgent: string;
+      consent: boolean;
+    };
+  };
+  createdAt: string;
+  updatedAt: string;
+  expiresAt: string;
 }
 
-interface SignatureData {
-  signature: string; // Base64 de la signature
-  signedAt: string;
-  ip: string;
-  userAgent?: string;
+export interface ContractTemplate {
+  id: string;
+  name: string;
+  type: 'mission' | 'permanent' | 'temporary';
+  content: string;
+  variables: string[];
+  legalRequirements: string[];
 }
 
-/**
- * Service principal de gestion des contrats
- */
-export class ContractService {
-
+class ContractService {
   /**
    * Génère automatiquement un contrat lors de l'acceptation d'une candidature
    */
-  async generateContractOnAcceptance(missionId: number, nurseId: string, establishmentId: string): Promise<Contract> {
-    console.log(`[ContractService] Génération automatique contrat - Mission: ${missionId}, Infirmier: ${nurseId}`);
-
+  async generateContractFromApplication(applicationId: string): Promise<ContractData> {
     try {
-      const db = await getDb();
+      logger.info('Génération automatique de contrat', { applicationId });
 
-      // Récupérer toutes les données nécessaires
-      const contractData = await this.gatherContractData(missionId, nurseId, establishmentId);
-
-      // Récupérer le template de contrat selon le type
-      const template = await this.getContractTemplate(establishmentId, contractData.mission.contractType || 'cdd');
-
-      // Générer le numéro de contrat unique
-      const contractNumber = await this.generateContractNumber();
-
-      // Calculer les détails financiers
-      const financialDetails = this.calculateFinancialDetails(contractData.mission);
-
-      // Générer le contenu HTML du contrat
-      const contractContent = await this.generateContractContent(template, contractData, financialDetails);
-
-      // Créer l'enregistrement du contrat
-      const [contract] = await db.insert(contracts).values({
-        missionId: contractData.mission.id,
-        nurseId,
-        establishmentId,
-        contractNumber,
-        title: `Contrat de mission - ${contractData.mission.title}`,
-        startDate: contractData.mission.startDate,
-        endDate: contractData.mission.endDate,
-        hourlyRate: contractData.mission.hourlyRate,
-        totalHours: financialDetails.totalHours.toString(),
-        totalAmount: financialDetails.totalAmount.toString(),
-        contractContent,
-        status: 'generated',
-        legalTerms: {
-          template: template.name,
-          generatedAt: new Date().toISOString(),
-          governingLaw: 'Droit français',
-          jurisdiction: 'Tribunaux français'
-        }
-      }).returning();
-
-      console.log(`[ContractService] Contrat généré avec succès: ${contract.contractNumber}`);
-
-      // Envoyer automatiquement si configuré
-      if (template.autoSend) {
-        await this.sendContractToNurse(contract.id);
+      // Récupérer la candidature
+      const application = await storage.getApplication(applicationId);
+      if (!application) {
+        throw new Error('Candidature non trouvée');
       }
+
+      // Récupérer la mission
+      const mission = await storage.getMission(application.missionId);
+      if (!mission) {
+        throw new Error('Mission non trouvée');
+      }
+
+      // Récupérer les profils
+      const nurse = await storage.getNurseProfile(application.nurseId);
+      const establishment = await storage.getEstablishmentProfile(mission.establishmentId);
+
+      if (!nurse || !establishment) {
+        throw new Error('Profils manquants');
+      }
+
+      // Générer les termes du contrat
+      const contractTerms = this.generateContractTerms(mission, nurse, establishment);
+
+      // Créer le contrat
+      const contract: ContractData = {
+        id: `contract_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+        missionId: mission.id,
+        nurseId: nurse.userId,
+        establishmentId: establishment.userId,
+        status: 'draft',
+        terms: contractTerms,
+        legalClauses: {
+          confidentiality: true,
+          insurance: true,
+          compliance: true
+        },
+        signatures: {},
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString() // 7 jours
+      };
+
+      // Sauvegarder le contrat
+      await storage.createContract(contract);
+
+      // Envoyer le contrat au candidat
+      await this.sendContractToNurse(contract);
+
+      logger.info('Contrat généré et envoyé avec succès', {
+        contractId: contract.id,
+        nurseId: nurse.userId
+      });
 
       return contract;
 
-    } catch (error: any) {
-      console.error('[ContractService] Erreur génération contrat:', error);
-      throw new Error(`Erreur lors de la génération du contrat: ${error?.message || 'Erreur inconnue'}`);
+    } catch (error) {
+      logger.error('Erreur génération contrat', { error, applicationId });
+      throw error;
     }
   }
 
   /**
-   * Rassemble toutes les données nécessaires pour générer le contrat
+   * Génère les termes du contrat basés sur la mission et les profils
    */
-  private async gatherContractData(missionId: number, nurseId: string, establishmentId: string): Promise<ContractGenerationData> {
-    const db = await getDb();
-
-    const [mission] = await db.select().from(missions).where(eq(missions.id, missionId));
-    if (!mission) throw new Error('Mission non trouvée');
-
-    const [nurse] = await db.select().from(users).where(eq(users.id, nurseId));
-    if (!nurse) throw new Error('Infirmier non trouvé');
-
-    const [nurseProfile] = await db.select().from(nurseProfiles).where(eq(nurseProfiles.userId, nurseId));
-    if (!nurseProfile) throw new Error('Profil infirmier non trouvé');
-
-    const [establishment] = await db.select().from(users).where(eq(users.id, establishmentId));
-    if (!establishment) throw new Error('Établissement non trouvé');
-
-    const [establishmentProfile] = await db.select().from(establishmentProfiles).where(eq(establishmentProfiles.userId, establishmentId));
-    if (!establishmentProfile) throw new Error('Profil établissement non trouvé');
-
-    const [application] = await db.select().from(missionApplications)
-      .where(and(
-        eq(missionApplications.missionId, missionId),
-        eq(missionApplications.nurseId, nurseProfile.id)
-      ));
-
+  private generateContractTerms(mission: any, nurse: any, establishment: any) {
     return {
-      mission,
-      nurse,
-      nurseProfile,
-      establishment,
-      establishmentProfile,
-      application
+      hourlyRate: mission.hourlyRate,
+      startDate: mission.startDate,
+      endDate: mission.endDate,
+      shift: mission.shift,
+      location: mission.location || establishment.address,
+      responsibilities: this.generateResponsibilities(mission.specialization),
+      requirements: this.generateRequirements(mission.specialization, nurse.specializations)
     };
   }
 
   /**
-   * Récupère le template de contrat pour l'établissement selon le type
+   * Génère les responsabilités selon la spécialisation
    */
-  private async getContractTemplate(establishmentId: string, contractType: string = 'cdd'): Promise<ContractTemplate> {
-    const db = await getDb();
-
-    // Chercher un template spécifique à l'établissement
-    const [customTemplate] = await db.select().from(contractTemplates)
-      .where(and(
-        eq(contractTemplates.establishmentId, establishmentId),
-        eq(contractTemplates.isActive, true)
-      ));
-
-    if (customTemplate) {
-      return customTemplate;
-    }
-
-    // Utiliser le template par défaut selon le type de contrat
-    const [defaultTemplate] = await db.select().from(contractTemplates)
-      .where(and(
-        eq(contractTemplates.isDefault, true),
-        eq(contractTemplates.isActive, true)
-      ));
-
-    if (defaultTemplate) {
-      return defaultTemplate;
-    }
-
-    // Créer un template selon le type de contrat
-    return await this.createContractTemplateByType(contractType);
-  }
-
-  /**
-   * Crée un template de contrat selon le type
-   */
-  private async createContractTemplateByType(contractType: string): Promise<ContractTemplate> {
-    switch (contractType) {
-      case 'cdi':
-        return this.createCDITemplate();
-      case 'liberal':
-        return this.createLiberalTemplate();
-      case 'cdd':
-      default:
-        return this.createCDDTemplate();
-    }
-  }
-
-  /**
-   * Crée un template de contrat CDD
-   */
-  private async createCDDTemplate(): Promise<ContractTemplate> {
-    const db = await getDb();
-
-    const [template] = await db.insert(contractTemplates).values({
-      name: 'Template CDD Standard',
-      description: 'Contrat à durée déterminée pour missions temporaires',
-      contractType: 'cdd',
-      isDefault: true,
-      isActive: true,
-      content: `
-        <h1>CONTRAT À DURÉE DÉTERMINÉE</h1>
-        <p>Entre les soussignés :</p>
-        <p><strong>{{establishment.name}}</strong>, établissement de santé, représenté par {{establishment.contactPerson}},</p>
-        <p>Et</p>
-        <p><strong>{{nurse.firstName}} {{nurse.lastName}}</strong>, infirmier(ère),</p>
-        <p>Il a été convenu ce qui suit :</p>
-
-        <h2>Article 1 - Objet</h2>
-        <p>Le présent contrat a pour objet l'exécution de la mission : {{mission.title}}</p>
-
-        <h2>Article 2 - Durée</h2>
-        <p>Le contrat prend effet le {{mission.startDate}} et se termine le {{mission.endDate}}.</p>
-
-        <h2>Article 3 - Rémunération</h2>
-        <p>Taux horaire : {{mission.hourlyRate}}€/heure<br>
-        Total estimé : {{financial.totalAmount}}€ pour {{financial.totalHours}} heures</p>
-
-        <h2>Article 4 - Conditions</h2>
-        <p>L'infirmier s'engage à respecter les règles de l'établissement et la déontologie professionnelle.</p>
-
-        <p>Fait à {{establishment.city}}, le {{currentDate}}</p>
-      `,
-      variables: {
-        establishment: ['name', 'contactPerson', 'city'],
-        nurse: ['firstName', 'lastName', 'rppsNumber'],
-        mission: ['title', 'startDate', 'endDate', 'hourlyRate'],
-        financial: ['totalAmount', 'totalHours'],
-        currentDate: 'auto'
-      },
-      autoSend: true,
-      requiresSignature: true
-    }).returning();
-
-    return template;
-  }
-
-  /**
-   * Crée un template de contrat CDI
-   */
-  private async createCDITemplate(): Promise<ContractTemplate> {
-    const db = await getDb();
-
-    const [template] = await db.insert(contractTemplates).values({
-      name: 'Template CDI Standard',
-      description: 'Contrat à durée indéterminée pour missions longues',
-      contractType: 'cdi',
-      isDefault: true,
-      isActive: true,
-      content: `
-        <h1>CONTRAT À DURÉE INDÉTERMINÉE</h1>
-        <p>Entre les soussignés :</p>
-        <p><strong>{{establishment.name}}</strong>, établissement de santé, représenté par {{establishment.contactPerson}},</p>
-        <p>Et</p>
-        <p><strong>{{nurse.firstName}} {{nurse.lastName}}</strong>, infirmier(ère),</p>
-        <p>Il a été convenu ce qui suit :</p>
-
-        <h2>Article 1 - Objet</h2>
-        <p>Le présent contrat a pour objet l'embauche en CDI pour la mission : {{mission.title}}</p>
-
-        <h2>Article 2 - Durée</h2>
-        <p>Le contrat prend effet le {{mission.startDate}} pour une durée indéterminée.</p>
-
-        <h2>Article 3 - Rémunération</h2>
-        <p>Taux horaire : {{mission.hourlyRate}}€/heure<br>
-        Salaire mensuel estimé : {{financial.monthlySalary}}€</p>
-
-        <h2>Article 4 - Conditions</h2>
-        <p>L'infirmier s'engage à respecter les règles de l'établissement et la déontologie professionnelle.</p>
-
-        <p>Fait à {{establishment.city}}, le {{currentDate}}</p>
-      `,
-      variables: {
-        establishment: ['name', 'contactPerson', 'city'],
-        nurse: ['firstName', 'lastName', 'rppsNumber'],
-        mission: ['title', 'startDate', 'hourlyRate'],
-        financial: ['monthlySalary'],
-        currentDate: 'auto'
-      },
-      autoSend: true,
-      requiresSignature: true
-    }).returning();
-
-    return template;
-  }
-
-  /**
-   * Crée un template de contrat libéral
-   */
-  private async createLiberalTemplate(): Promise<ContractTemplate> {
-    const db = await getDb();
-
-    const [template] = await db.insert(contractTemplates).values({
-      name: 'Template Libéral Standard',
-      description: 'Contrat pour infirmiers libéraux',
-      contractType: 'liberal',
-      isDefault: true,
-      isActive: true,
-      content: `
-        <h1>CONTRAT DE PRESTATION DE SERVICES</h1>
-        <p>Entre les soussignés :</p>
-        <p><strong>{{establishment.name}}</strong>, établissement de santé, représenté par {{establishment.contactPerson}},</p>
-        <p>Et</p>
-        <p><strong>{{nurse.firstName}} {{nurse.lastName}}</strong>, infirmier(ère) libéral(e),</p>
-        <p>Il a été convenu ce qui suit :</p>
-
-        <h2>Article 1 - Objet</h2>
-        <p>Le présent contrat a pour objet la prestation de services pour la mission : {{mission.title}}</p>
-
-        <h2>Article 2 - Durée</h2>
-        <p>La prestation prend effet le {{mission.startDate}} et se termine le {{mission.endDate}}.</p>
-
-        <h2>Article 3 - Rémunération</h2>
-        <p>Taux horaire : {{mission.hourlyRate}}€/heure<br>
-        Total estimé : {{financial.totalAmount}}€ pour {{financial.totalHours}} heures</p>
-
-        <h2>Article 4 - Conditions</h2>
-        <p>L'infirmier libéral s'engage à respecter les règles de l'établissement et la déontologie professionnelle.</p>
-
-        <p>Fait à {{establishment.city}}, le {{currentDate}}</p>
-      `,
-      variables: {
-        establishment: ['name', 'contactPerson', 'city'],
-        nurse: ['firstName', 'lastName', 'rppsNumber'],
-        mission: ['title', 'startDate', 'endDate', 'hourlyRate'],
-        financial: ['totalAmount', 'totalHours'],
-        currentDate: 'auto'
-      },
-      autoSend: true,
-      requiresSignature: true
-    }).returning();
-
-    return template;
-  }
-
-  /**
-   * Génère un numéro de contrat unique
-   */
-  private async generateContractNumber(): Promise<string> {
-    const db = await getDb();
-
-    const count = await db.select().from(contracts)
-      .where(eq(contracts.status, 'generated'));
-
-    const contractNumber = `CONTRACT-${new Date().getFullYear()}-${String(count.length + 1).padStart(6, '0')}`;
-    return contractNumber;
-  }
-
-  /**
-   * Calcule les détails financiers du contrat
-   */
-  private calculateFinancialDetails(mission: Mission) {
-    const startDate = new Date(mission.startDate);
-    const endDate = new Date(mission.endDate);
-    const daysDiff = Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24));
-    const totalHours = daysDiff * 8; // 8h par jour par défaut
-    const totalAmount = totalHours * mission.hourlyRate;
-
-    return {
-      totalHours,
-      totalAmount,
-      dailyRate: mission.hourlyRate * 8,
-      monthlySalary: totalAmount / (daysDiff / 30)
+  private generateResponsibilities(specialization: string): string[] {
+    const responsibilitiesMap: Record<string, string[]> = {
+      'cardiology': [
+        'Surveillance des paramètres cardiaques',
+        'Administration des traitements cardiologiques',
+        'Participation aux soins intensifs cardiologiques',
+        'Collaboration avec l\'équipe médicale cardiologique'
+      ],
+      'emergency': [
+        'Accueil et triage des patients',
+        'Soins d\'urgence immédiats',
+        'Collaboration avec l\'équipe de réanimation',
+        'Participation aux protocoles d\'urgence'
+      ],
+      'surgery': [
+        'Préparation préopératoire des patients',
+        'Assistance en salle d\'opération',
+        'Soins postopératoires',
+        'Surveillance des complications'
+      ],
+      'pediatrics': [
+        'Soins spécialisés pédiatriques',
+        'Communication avec les familles',
+        'Surveillance de la croissance et développement',
+        'Application des protocoles pédiatriques'
+      ]
     };
+
+    return responsibilitiesMap[specialization] || [
+      'Soins infirmiers spécialisés',
+      'Surveillance des patients',
+      'Collaboration avec l\'équipe médicale',
+      'Respect des protocoles de soins'
+    ];
   }
 
   /**
-   * Génère le contenu HTML du contrat avec substitution de variables
+   * Génère les exigences selon la spécialisation
    */
-  private async generateContractContent(
-    template: ContractTemplate,
-    data: ContractGenerationData,
-    financialDetails: any
-  ): Promise<string> {
-    let content = template.content;
+  private generateRequirements(specialization: string, nurseSpecializations: string[]): string[] {
+    const baseRequirements = [
+      'Diplôme d\'État d\'Infirmier',
+      'Inscription au tableau de l\'Ordre',
+      'Formation continue à jour',
+      'Certification BLS/ACLS'
+    ];
 
-    // Substitution des variables
-    content = content.replace(/\{\{establishment\.name\}\}/g, data.establishmentProfile.name || data.establishment.firstName);
-    content = content.replace(/\{\{establishment\.contactPerson\}\}/g, data.establishment.firstName + ' ' + data.establishment.lastName);
-    content = content.replace(/\{\{establishment\.city\}\}/g, data.establishmentProfile.city || 'Paris');
+    const specializationRequirements: Record<string, string[]> = {
+      'cardiology': ['Formation en cardiologie', 'Certification en monitoring cardiaque'],
+      'emergency': ['Formation en réanimation', 'Certification ATLS'],
+      'surgery': ['Formation en bloc opératoire', 'Certification en asepsie'],
+      'pediatrics': ['Formation en pédiatrie', 'Certification PALS']
+    };
 
-    content = content.replace(/\{\{nurse\.firstName\}\}/g, data.nurse.firstName);
-    content = content.replace(/\{\{nurse\.lastName\}\}/g, data.nurse.lastName);
-    content = content.replace(/\{\{nurse\.rppsNumber\}\}/g, data.nurseProfile.rppsNumber || 'N/A');
+    const specificRequirements = specializationRequirements[specialization] || [];
 
-    content = content.replace(/\{\{mission\.title\}\}/g, data.mission.title);
-    content = content.replace(/\{\{mission\.startDate\}\}/g, new Date(data.mission.startDate).toLocaleDateString('fr-FR'));
-    content = content.replace(/\{\{mission\.endDate\}\}/g, new Date(data.mission.endDate).toLocaleDateString('fr-FR'));
-    content = content.replace(/\{\{mission\.hourlyRate\}\}/g, data.mission.hourlyRate.toString());
-
-    content = content.replace(/\{\{financial\.totalAmount\}\}/g, financialDetails.totalAmount.toFixed(2));
-    content = content.replace(/\{\{financial\.totalHours\}\}/g, financialDetails.totalHours.toString());
-    content = content.replace(/\{\{financial\.monthlySalary\}\}/g, financialDetails.monthlySalary.toFixed(2));
-
-    content = content.replace(/\{\{currentDate\}\}/g, new Date().toLocaleDateString('fr-FR'));
-
-    return content;
+    return [...baseRequirements, ...specificRequirements];
   }
 
   /**
-   * Envoie le contrat à l'infirmier
+   * Envoie le contrat au candidat accepté
    */
-  async sendContractToNurse(contractId: number): Promise<void> {
-    const db = await getDb();
+  private async sendContractToNurse(contract: ContractData): Promise<void> {
+    try {
+      // Générer le PDF du contrat
+      const contractPDF = await this.generateContractPDF(contract);
 
-    const [contract] = await db.select().from(contracts).where(eq(contracts.id, contractId));
-    if (!contract) throw new Error('Contrat non trouvé');
+      // Envoyer par email avec lien de signature
+      await this.sendContractEmail(contract, contractPDF);
 
-    console.log(`[ContractService] Envoi du contrat ${contract.contractNumber} à l'infirmier`);
+      // Mettre à jour le statut
+      contract.status = 'sent';
+      await storage.updateContract(contract.id, contract);
 
-    // TODO: Implémenter l'envoi réel (email, notification push, etc.)
-    // Pour l'instant, on met à jour le statut
-    await db.update(contracts)
-      .set({ status: 'sent', sentAt: new Date() })
-      .where(eq(contracts.id, contractId));
+      logger.info('Contrat envoyé au candidat', {
+        contractId: contract.id,
+        nurseId: contract.nurseId
+      });
+
+    } catch (error) {
+      logger.error('Erreur envoi contrat', { error, contractId: contract.id });
+      throw error;
+    }
   }
 
   /**
-   * Signe le contrat (infirmier ou établissement)
+   * Génère le PDF du contrat
    */
-  async signContract(contractId: number, userType: 'nurse' | 'establishment', signatureData: SignatureData): Promise<Contract> {
-    const db = await getDb();
+  private async generateContractPDF(contract: ContractData): Promise<Buffer> {
+    // TODO: Implémenter la génération PDF avec une bibliothèque comme PDFKit
+    // Pour l'instant, retourner un buffer vide
+    return Buffer.from('PDF du contrat à générer');
+  }
 
-    const [contract] = await db.select().from(contracts).where(eq(contracts.id, contractId));
-    if (!contract) throw new Error('Contrat non trouvé');
+  /**
+   * Envoie l'email avec le contrat
+   */
+  private async sendContractEmail(contract: ContractData, pdfBuffer: Buffer): Promise<void> {
+    // TODO: Implémenter l'envoi d'email avec le PDF en pièce jointe
+    // et le lien de signature électronique
+    logger.info('Email de contrat à envoyer', { contractId: contract.id });
+  }
 
-    const updateData: any = {};
+  /**
+   * Traite la signature électronique du candidat
+   */
+  async signContractByNurse(contractId: string, signatureData: {
+    ip: string;
+    userAgent: string;
+    consent: boolean;
+  }): Promise<ContractData> {
+    try {
+      const contract = await storage.getContract(contractId);
+      if (!contract) {
+        throw new Error('Contrat non trouvé');
+      }
 
-    if (userType === 'nurse') {
-      updateData.nurseSignature = signatureData;
-      updateData.nurseSignedAt = new Date();
-    } else {
-      updateData.establishmentSignature = signatureData;
-      updateData.establishmentSignedAt = new Date();
+      if (contract.status !== 'sent') {
+        throw new Error('Contrat non disponible pour signature');
+      }
+
+      // Vérifier la validité de la signature électronique
+      const isValidSignature = await this.validateElectronicSignature(signatureData);
+      if (!isValidSignature) {
+        throw new Error('Signature électronique invalide');
+      }
+
+      // Enregistrer la signature
+      contract.signatures.nurse = {
+        date: new Date().toISOString(),
+        ip: signatureData.ip,
+        userAgent: signatureData.userAgent,
+        consent: signatureData.consent
+      };
+
+      contract.status = 'signed_nurse';
+      contract.updatedAt = new Date().toISOString();
+
+      await storage.updateContract(contractId, contract);
+
+      // Notifier l'établissement
+      await this.notifyEstablishmentOfSignature(contract);
+
+      logger.info('Contrat signé par le candidat', {
+        contractId,
+        nurseId: contract.nurseId
+      });
+
+      return contract;
+
+    } catch (error) {
+      logger.error('Erreur signature contrat', { error, contractId });
+      throw error;
+    }
+  }
+
+  /**
+   * Valide la signature électronique
+   */
+  private async validateElectronicSignature(signatureData: any): Promise<boolean> {
+    // TODO: Implémenter la validation selon les standards eIDAS
+    // Vérification de l'identité, horodatage, etc.
+    return true; // Pour l'instant
+  }
+
+  /**
+   * Notifie l'établissement de la signature
+   */
+  private async notifyEstablishmentOfSignature(contract: ContractData): Promise<void> {
+    // TODO: Envoyer notification à l'établissement
+    logger.info('Notification de signature à envoyer à l\'établissement', {
+      contractId: contract.id
+    });
+  }
+
+  /**
+   * Récupère les contrats d'un établissement
+   */
+  async getEstablishmentContracts(establishmentId: string): Promise<ContractData[]> {
+    return await storage.getContractsByEstablishment(establishmentId);
+  }
+
+  /**
+   * Récupère les contrats d'un candidat
+   */
+  async getNurseContracts(nurseId: string): Promise<ContractData[]> {
+    return await storage.getContractsByNurse(nurseId);
+  }
+
+  /**
+   * Annule un contrat
+   */
+  async cancelContract(contractId: string, reason: string): Promise<void> {
+    const contract = await storage.getContract(contractId);
+    if (!contract) {
+      throw new Error('Contrat non trouvé');
     }
 
-    // Vérifier si les deux parties ont signé
-    const [updatedContract] = await db.update(contracts)
-      .set(updateData)
-      .where(eq(contracts.id, contractId))
-      .returning();
+    contract.status = 'cancelled';
+    contract.updatedAt = new Date().toISOString();
 
-    // Si les deux parties ont signé, marquer comme signé
-    if (updatedContract.nurseSignature && updatedContract.establishmentSignature) {
-      await db.update(contracts)
-        .set({ status: 'signed', signedAt: new Date() })
-        .where(eq(contracts.id, contractId));
-    }
+    await storage.updateContract(contractId, contract);
 
-    return updatedContract;
+    // Notifier les parties
+    await this.notifyContractCancellation(contract, reason);
+
+    logger.info('Contrat annulé', { contractId, reason });
   }
 
   /**
-   * Récupère les contrats d'un utilisateur
+   * Notifie l'annulation du contrat
    */
-  async getUserContracts(userId: string, role: 'nurse' | 'establishment'): Promise<Contract[]> {
-    const db = await getDb();
-
-    const field = role === 'nurse' ? contracts.nurseId : contracts.establishmentId;
-    return await db.select().from(contracts).where(eq(field, userId));
-  }
-
-  /**
-   * Récupère un contrat par son ID
-   */
-  async getContractById(contractId: number): Promise<Contract | null> {
-    const db = await getDb();
-
-    const [contract] = await db.select().from(contracts).where(eq(contracts.id, contractId));
-    return contract || null;
+  private async notifyContractCancellation(contract: ContractData, reason: string): Promise<void> {
+    // TODO: Envoyer notifications d'annulation
+    logger.info('Notification d\'annulation à envoyer', {
+      contractId: contract.id,
+      reason
+    });
   }
 }
 

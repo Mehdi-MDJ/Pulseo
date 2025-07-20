@@ -1,9 +1,9 @@
 import OpenAI from "openai";
-import { storage } from "./storage";
+import { storage } from "./services/storageService";
 
 // the newest OpenAI model is "gpt-4o" which was released May 13, 2024. do not change this unless explicitly requested by the user
-const openai = new OpenAI({ 
-  apiKey: process.env.OPENAI_API_KEY || process.env.OPENAI_KEY || "your-openai-api-key" 
+const openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY || process.env.OPENAI_KEY || "your-openai-api-key"
 });
 
 interface NurseMatchScore {
@@ -59,7 +59,7 @@ export async function matchNursesToMission(missionId: number): Promise<void> {
           - Availability alignment
           - Rate compatibility
           - Schedule fit
-          
+
           Provide a score from 0-100 for each nurse and explain the reasoning. Respond with JSON in this format:
           {
             "matches": [
@@ -82,7 +82,7 @@ export async function matchNursesToMission(missionId: number): Promise<void> {
     });
 
     const result = JSON.parse(response.choices[0].message.content || "{}");
-    
+
     // Store match scores and create applications for top matches
     if (result.matches && Array.isArray(result.matches)) {
       for (const match of result.matches) {
@@ -138,7 +138,7 @@ export async function generateAbsenceForecasts(establishmentId: number): Promise
           - Historical absence patterns
           - Healthcare industry trends
           - Emergency situations
-          
+
           Provide confidence scores (0-100) and actionable insights. Respond with JSON in this format:
           {
             "forecasts": [
@@ -162,7 +162,7 @@ export async function generateAbsenceForecasts(establishmentId: number): Promise
     });
 
     const result = JSON.parse(response.choices[0].message.content || "{}");
-    
+
     // Store forecasts in database
     if (result.forecasts && Array.isArray(result.forecasts)) {
       for (const forecast of result.forecasts) {
@@ -190,7 +190,7 @@ export async function analyzeNurseProfile(nurseProfile: any): Promise<string[]> 
         {
           role: "system",
           content: `You are an AI assistant that analyzes nurse profiles and provides recommendations for improving their job matching potential. Consider their specialization, experience, and profile completeness.
-          
+
           Respond with JSON in this format:
           {
             "recommendations": ["recommendation1", "recommendation2", ...]

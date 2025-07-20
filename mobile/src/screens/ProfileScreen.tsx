@@ -9,15 +9,47 @@ import {
   StatusBar,
   Modal,
   Alert,
+  Image,
+  useWindowDimensions,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useNavigation } from '@react-navigation/native';
+import Button from '../components/Button';
+import { useAppTheme } from '../theme';
+
+const fakeProfile = {
+  name: 'Emma Dubois',
+  avatar: 'https://randomuser.me/api/portraits/women/44.jpg',
+  level: 5,
+  xp: 1250,
+  nextLevel: 2000,
+  badges: [
+    { icon: 'star', label: 'Expert Urgences' },
+    { icon: 'medal', label: 'Streak 7j' },
+    { icon: 'trophy', label: 'Top 10%' },
+  ],
+  stats: [
+    { label: 'Missions', value: 24, icon: 'checkmark-circle' },
+    { label: 'Gains', value: '2840€', icon: 'cash' },
+    { label: 'Note', value: '4.9', icon: 'star' },
+  ],
+  availability: 'Disponible',
+  streak: 7,
+  rank: 'Expert',
+  experience: '5 ans',
+  rating: 4.8,
+  missionsCompleted: 127,
+  totalEarnings: '2840€',
+};
 
 export default function ProfileScreen() {
-  const navigation = useNavigation();
   const [showAvailabilityModal, setShowAvailabilityModal] = useState(false);
   const [selectedDates, setSelectedDates] = useState<Date[]>([]);
+  const { width } = useWindowDimensions();
+  const isMobile = width < 600;
+  const navigation = useNavigation();
+  const theme = useAppTheme();
 
   const userProfile = {
     name: 'Marie Dubois',
@@ -42,8 +74,8 @@ export default function ProfileScreen() {
     {
       title: 'Compte',
       items: [
-        { id: 'profile', title: 'Modifier le profil', icon: 'person-outline', action: () => navigation.navigate('EditProfile' as never) },
-        { id: 'availability', title: 'Gérer disponibilités', icon: 'calendar-outline', action: () => navigation.navigate('Availability' as never) },
+        { id: 'profile', title: 'Modifier le profil', icon: 'person-outline', action: () => {} },
+        { id: 'availability', title: 'Gérer disponibilités', icon: 'calendar-outline', action: () => setShowAvailabilityModal(true) },
         { id: 'notifications', title: 'Notifications', icon: 'notifications-outline', action: () => Alert.alert('Notifications', 'Page des notifications') },
         { id: 'privacy', title: 'Confidentialité', icon: 'shield-outline', action: () => Alert.alert('Confidentialité', 'Page de confidentialité') },
       ]
@@ -51,7 +83,7 @@ export default function ProfileScreen() {
     {
       title: 'Préférences',
       items: [
-        { id: 'preferences', title: 'Préférences missions', icon: 'settings-outline', action: () => navigation.navigate('Settings' as never) },
+        { id: 'preferences', title: 'Préférences missions', icon: 'settings-outline', action: () => {} },
         { id: 'location', title: 'Zone géographique', icon: 'location-outline', action: () => Alert.alert('Zone géographique', 'Gérer votre zone de recherche') },
         { id: 'language', title: 'Langue', icon: 'language-outline', action: () => Alert.alert('Langue', 'Choisir la langue') },
         { id: 'theme', title: 'Thème', icon: 'color-palette-outline', action: () => Alert.alert('Thème', 'Choisir le thème') },
@@ -60,7 +92,7 @@ export default function ProfileScreen() {
     {
       title: 'Support',
       items: [
-        { id: 'help', title: 'Aide & Support', icon: 'help-circle-outline', action: () => navigation.navigate('Help' as never) },
+        { id: 'help', title: 'Aide & Support', icon: 'help-circle-outline', action: () => {} },
         { id: 'feedback', title: 'Donner un avis', icon: 'chatbubble-outline', action: () => Alert.alert('Avis', 'Donner votre avis') },
         { id: 'about', title: 'À propos', icon: 'information-circle-outline', action: () => Alert.alert('À propos', 'Version 1.0.0 - NurseLinkAI') },
       ]
@@ -71,132 +103,87 @@ export default function ProfileScreen() {
     <View style={styles.header}>
       <StatusBar barStyle="light-content" backgroundColor="#2563eb" />
       <Text style={styles.headerTitle}>Profil</Text>
-      <TouchableOpacity style={styles.settingsButton} onPress={() => navigation.navigate('Settings' as never)}>
+      <TouchableOpacity style={styles.settingsButton} onPress={() => {}}>
         <Ionicons name="settings-outline" size={24} color="#ffffff" />
       </TouchableOpacity>
     </View>
   );
 
   const renderProfileCard = () => (
-    <View style={styles.profileCard}>
-      <LinearGradient
-        colors={['#2563eb', '#1d4ed8']}
-        style={styles.profileGradient}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-      >
-        <View style={styles.profileHeader}>
-          <View style={styles.avatarContainer}>
-            <View style={styles.avatar}>
-              <Text style={styles.avatarText}>
-                {userProfile.name.split(' ').map(n => n[0]).join('')}
-              </Text>
-      </View>
-            <View style={styles.levelBadge}>
-              <Text style={styles.levelText}>{userProfile.level}</Text>
-      </View>
+    <View style={[styles.profileCard, !isMobile && styles.profileCardDesktop]}>
+      {/* Header avec avatar et infos principales */}
+      <View style={styles.profileHeader}>
+        <Image source={{ uri: fakeProfile.avatar }} style={styles.avatar} />
+        <View style={styles.profileInfo}>
+          <View style={styles.nameRow}>
+            <Text style={styles.name}>{fakeProfile.name}</Text>
+            <Ionicons name="checkmark-circle" size={20} color="#10b981" />
           </View>
-          <View style={styles.profileInfo}>
-            <Text style={styles.profileName}>{userProfile.name}</Text>
-            <Text style={styles.profileRank}>{userProfile.rank}</Text>
-            <View style={styles.ratingContainer}>
-              <Ionicons name="star" size={16} color="#fbbf24" />
-              <Text style={styles.ratingText}>{userProfile.rating}</Text>
-              <Text style={styles.missionsText}>• {userProfile.missionsCompleted} missions</Text>
-        </View>
-          </View>
-        </View>
-      </LinearGradient>
-
-      <View style={styles.profileStats}>
-        <View style={styles.statItem}>
-          <Text style={styles.statValue}>{userProfile.streak}</Text>
-          <Text style={styles.statLabel}>Jours consécutifs</Text>
-          </View>
-        <View style={styles.statDivider} />
-        <View style={styles.statItem}>
-          <Text style={styles.statValue}>{userProfile.experience}</Text>
-          <Text style={styles.statLabel}>Expérience</Text>
-        </View>
-        <View style={styles.statDivider} />
-        <View style={styles.statItem}>
-          <Text style={styles.statValue}>{userProfile.specializations.length}</Text>
-          <Text style={styles.statLabel}>Spécialisations</Text>
-        </View>
-      </View>
-    </View>
-  );
-
-  const renderGamification = () => (
-    <View style={styles.gamificationCard}>
-      <Text style={styles.sectionTitle}>Progression</Text>
-
-      <View style={styles.progressSection}>
-        <View style={styles.progressHeader}>
-          <Text style={styles.progressTitle}>Niveau {userProfile.level}</Text>
-          <Text style={styles.progressSubtitle}>Niveau {userProfile.level + 1}</Text>
+          <Text style={styles.specialization}>Infirmière • {fakeProfile.experience} d'expérience</Text>
+          <View style={styles.badgesRow}>
+            <View style={styles.badge}>
+              <Ionicons name="star" size={12} color="#f59e0b" />
+              <Text style={styles.badgeText}>{fakeProfile.rating}</Text>
             </View>
-        <View style={styles.progressBar}>
-          <LinearGradient
-            colors={['#10b981', '#059669']}
-            style={[styles.progressFill, { width: '75%' }]}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 0 }}
-          />
-          </View>
-        <Text style={styles.progressText}>75% vers le niveau suivant</Text>
-      </View>
-
-      <View style={styles.achievementsSection}>
-        <Text style={styles.achievementsTitle}>Réalisations</Text>
-        <View style={styles.achievementsGrid}>
-          {userProfile.achievements.map((achievement) => (
-            <View key={achievement.id} style={styles.achievementItem}>
-              <View style={[
-                styles.achievementIcon,
-                { backgroundColor: achievement.unlocked ? '#10b981' : '#e5e7eb' }
-              ]}>
-                <Ionicons
-                  name={achievement.icon as any}
-                  size={20}
-                  color={achievement.unlocked ? '#ffffff' : '#9ca3af'}
-                />
-              </View>
-              <Text style={[
-                styles.achievementText,
-                { color: achievement.unlocked ? '#1f2937' : '#9ca3af' }
-              ]}>
-                {achievement.name}
-              </Text>
+            <View style={styles.badge}>
+              <Ionicons name="flame" size={12} color="#f59e0b" />
+              <Text style={styles.badgeText}>{fakeProfile.streak}j</Text>
             </View>
-          ))}
+            <View style={styles.badge}>
+              <Ionicons name="trophy" size={12} color="#8b5cf6" />
+              <Text style={styles.badgeText}>{fakeProfile.rank}</Text>
+            </View>
           </View>
+        </View>
       </View>
-    </View>
-  );
 
-  const renderAvailabilityButton = () => (
-    <TouchableOpacity
-      style={styles.availabilityButton}
-      onPress={() => navigation.navigate('Availability' as never)}
-    >
-      <LinearGradient
-        colors={['#10b981', '#059669']}
-        style={styles.availabilityButtonGradient}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-      >
-        <Ionicons name="calendar" size={20} color="#ffffff" />
-        <Text style={styles.availabilityButtonText}>Gérer mes disponibilités</Text>
-        <Ionicons name="chevron-forward" size={20} color="#ffffff" />
-      </LinearGradient>
-    </TouchableOpacity>
+      {/* Stats principales */}
+      <View style={styles.statsContainer}>
+        <View style={styles.statItem}>
+          <View style={[styles.statIcon, { backgroundColor: '#dbeafe' }]}>
+            <Ionicons name="checkmark-circle" size={20} color="#2563eb" />
+          </View>
+          <View style={styles.statContent}>
+            <Text style={styles.statValue}>{fakeProfile.missionsCompleted}</Text>
+            <Text style={styles.statLabel}>Missions réalisées</Text>
+          </View>
+        </View>
+        <View style={styles.statItem}>
+          <View style={[styles.statIcon, { backgroundColor: '#fef3c7' }]}>
+            <Ionicons name="cash" size={20} color="#f59e0b" />
+          </View>
+          <View style={styles.statContent}>
+            <Text style={styles.statValue}>{fakeProfile.totalEarnings}</Text>
+            <Text style={styles.statLabel}>Gains totaux</Text>
+          </View>
+        </View>
+        <View style={styles.statItem}>
+          <View style={[styles.statIcon, { backgroundColor: '#f3e8ff' }]}>
+            <Ionicons name="star" size={20} color="#8b5cf6" />
+          </View>
+          <View style={styles.statContent}>
+            <Text style={styles.statValue}>{fakeProfile.rating}</Text>
+            <Text style={styles.statLabel}>Note moyenne</Text>
+          </View>
+        </View>
+      </View>
+
+      {/* Bouton disponibilité */}
+      <Button
+        title="Mettre à jour mes disponibilités"
+        onPress={() => setShowAvailabilityModal(true)}
+        accessibilityLabel="Mettre à jour mes disponibilités"
+        icon="calendar"
+        size="large"
+        style={{ marginTop: 16 }}
+      />
+    </View>
   );
 
   const renderSettings = () => (
-      <View style={styles.settingsContainer}>
+    <View style={styles.settingsContainer}>
       {settingsSections.map((section, sectionIndex) => (
-        <View key={sectionIndex} style={styles.settingsSection}>
+        <View key={sectionIndex} style={[styles.settingsSection, !isMobile && styles.settingsSectionDesktop]}>
           <Text style={styles.settingsSectionTitle}>{section.title}</Text>
           {section.items.map((item) => (
             <TouchableOpacity
@@ -207,7 +194,7 @@ export default function ProfileScreen() {
               <View style={styles.settingsItemLeft}>
                 <Ionicons name={item.icon as any} size={20} color="#6b7280" />
                 <Text style={styles.settingsItemTitle}>{item.title}</Text>
-            </View>
+              </View>
               <Ionicons name="chevron-forward" size={20} color="#9ca3af" />
             </TouchableOpacity>
           ))}
@@ -229,18 +216,27 @@ export default function ProfileScreen() {
             onPress={() => setShowAvailabilityModal(false)}
           >
             <Ionicons name="close" size={24} color="#1f2937" />
-        </TouchableOpacity>
+          </TouchableOpacity>
           <Text style={styles.modalTitle}>Mes disponibilités</Text>
-          <TouchableOpacity
-            style={styles.modalSaveButton}
+          <Button
+            title="Fermer"
+            onPress={() => setShowAvailabilityModal(false)}
+            accessibilityLabel="Fermer la modale de disponibilités"
+            size="small"
+            style={{ marginRight: 8 }}
+            variant="outline"
+          />
+          <Button
+            title="Enregistrer"
             onPress={() => {
               setShowAvailabilityModal(false);
               Alert.alert('Succès', 'Vos disponibilités ont été mises à jour');
             }}
-          >
-            <Text style={styles.modalSaveButtonText}>Enregistrer</Text>
-        </TouchableOpacity>
-            </View>
+            accessibilityLabel="Enregistrer mes disponibilités"
+            size="small"
+            variant="primary"
+          />
+        </View>
 
         <ScrollView style={styles.modalContent}>
           <View style={styles.calendarContainer}>
@@ -265,15 +261,15 @@ export default function ProfileScreen() {
               <View style={styles.availabilityTypeItem}>
                 <View style={[styles.availabilityDot, { backgroundColor: '#10b981' }]} />
                 <Text style={styles.availabilityTypeText}>Disponible</Text>
-            </View>
+              </View>
               <View style={styles.availabilityTypeItem}>
                 <View style={[styles.availabilityDot, { backgroundColor: '#f59e0b' }]} />
                 <Text style={styles.availabilityTypeText}>Partiellement disponible</Text>
-            </View>
+              </View>
               <View style={styles.availabilityTypeItem}>
                 <View style={[styles.availabilityDot, { backgroundColor: '#ef4444' }]} />
                 <Text style={styles.availabilityTypeText}>Indisponible</Text>
-            </View>
+              </View>
             </View>
           </View>
         </ScrollView>
@@ -282,17 +278,15 @@ export default function ProfileScreen() {
   );
 
   return (
-    <SafeAreaView style={styles.container}>
-        {renderHeader()}
+    <SafeAreaView style={[styles.container, { backgroundColor: theme.background.primary }]}>
+      {renderHeader()}
       <ScrollView
         style={styles.content}
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={styles.contentContainer}
+        contentContainerStyle={[styles.contentContainer, { paddingBottom: 32, paddingTop: 8 }]}
       >
-        {renderProfileCard()}
-        {renderGamification()}
-        {renderAvailabilityButton()}
-        {renderSettings()}
+        <View style={{ marginBottom: 32 }}>{renderProfileCard()}</View>
+        <View style={{ marginBottom: 32 }}>{renderSettings()}</View>
       </ScrollView>
       {renderAvailabilityModal()}
     </SafeAreaView>
@@ -327,225 +321,124 @@ const styles = StyleSheet.create({
     paddingBottom: 20,
   },
   profileCard: {
-    margin: 20,
+    backgroundColor: '#fff',
     borderRadius: 20,
-    backgroundColor: '#ffffff',
+    padding: 20,
+    marginTop: 24,
+    marginHorizontal: 20,
+    marginBottom: 16,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 12,
-    elevation: 8,
-    overflow: 'hidden',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    elevation: 2,
   },
-  profileGradient: {
-    padding: 24,
+  profileCardDesktop: {
+    maxWidth: 500,
+    alignSelf: 'center',
   },
   profileHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-  },
-  avatarContainer: {
-    position: 'relative',
-    marginRight: 16,
+    marginBottom: 20,
   },
   avatar: {
     width: 80,
     height: 80,
     borderRadius: 40,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  avatarText: {
-    fontSize: 32,
-    fontWeight: 'bold',
-    color: '#ffffff',
-  },
-  levelBadge: {
-    position: 'absolute',
-    bottom: -4,
-    right: -4,
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: '#fbbf24',
-    alignItems: 'center',
-    justifyContent: 'center',
+    marginRight: 16,
     borderWidth: 3,
-    borderColor: '#ffffff',
-  },
-  levelText: {
-    fontSize: 12,
-    fontWeight: 'bold',
-    color: '#ffffff',
+    borderColor: '#2563eb',
   },
   profileInfo: {
     flex: 1,
   },
-  profileName: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#ffffff',
+  nameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
     marginBottom: 4,
   },
-  profileRank: {
-    fontSize: 16,
-    color: 'rgba(255, 255, 255, 0.8)',
-    marginBottom: 8,
-  },
-  ratingContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  ratingText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#ffffff',
-    marginLeft: 4,
-  },
-  missionsText: {
-    fontSize: 14,
-    color: 'rgba(255, 255, 255, 0.8)',
-    marginLeft: 8,
-  },
-  profileStats: {
-    flexDirection: 'row',
-    paddingVertical: 20,
-    paddingHorizontal: 24,
-  },
-  statItem: {
-    flex: 1,
-    alignItems: 'center',
-  },
-  statValue: {
-    fontSize: 20,
+  name: {
+    fontSize: 22,
     fontWeight: 'bold',
     color: '#1f2937',
-    marginBottom: 4,
+    marginRight: 8,
+  },
+  specialization: {
+    fontSize: 14,
+    color: '#6b7280',
+    marginBottom: 8,
+  },
+  badgesRow: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  badge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#f3f4f6',
+    borderRadius: 12,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
+  badgeText: {
+    fontSize: 12,
+    color: '#374151',
+    fontWeight: '600',
+    marginLeft: 4,
+  },
+  statsContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 20,
+  },
+  statItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  statIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  statContent: {
+    flex: 1,
+  },
+  statValue: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#1f2937',
   },
   statLabel: {
     fontSize: 12,
     color: '#6b7280',
-  },
-  statDivider: {
-    width: 1,
-    backgroundColor: '#e5e7eb',
-    marginHorizontal: 16,
-  },
-  gamificationCard: {
-    marginHorizontal: 20,
-    marginBottom: 20,
-    padding: 20,
-    backgroundColor: '#ffffff',
-    borderRadius: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    elevation: 2,
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#1f2937',
-    marginBottom: 16,
-  },
-  progressSection: {
-    marginBottom: 24,
-  },
-  progressHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 8,
-  },
-  progressTitle: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#1f2937',
-  },
-  progressSubtitle: {
-    fontSize: 14,
-    color: '#6b7280',
-  },
-  progressBar: {
-    height: 8,
-    backgroundColor: '#e5e7eb',
-    borderRadius: 4,
-    marginBottom: 8,
-  },
-  progressFill: {
-    height: '100%',
-    borderRadius: 4,
-  },
-  progressText: {
-    fontSize: 12,
-    color: '#6b7280',
-  },
-  achievementsSection: {
-    marginTop: 16,
-  },
-  achievementsTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#1f2937',
-    marginBottom: 12,
-  },
-  achievementsGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 12,
-  },
-  achievementItem: {
-    alignItems: 'center',
-    width: '45%',
-  },
-  achievementIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 8,
-  },
-  achievementText: {
-    fontSize: 12,
-    fontWeight: '500',
-    textAlign: 'center',
-  },
-  availabilityButton: {
-    marginHorizontal: 20,
-    marginBottom: 20,
-    borderRadius: 16,
-    shadowColor: '#10b981',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    elevation: 6,
-  },
-  availabilityButtonGradient: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-    borderRadius: 16,
-  },
-  availabilityButtonText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#ffffff',
-    flex: 1,
-    marginLeft: 12,
+    marginTop: 2,
   },
   settingsContainer: {
     marginHorizontal: 20,
   },
   settingsSection: {
-    marginBottom: 24,
+    backgroundColor: '#fff',
+    borderRadius: 20,
+    padding: 20,
+    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  settingsSectionDesktop: {
+    maxWidth: 500,
+    alignSelf: 'center',
   },
   settingsSectionTitle: {
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: 'bold',
     color: '#1f2937',
     marginBottom: 12,
   },
@@ -553,16 +446,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: '#ffffff',
-    paddingHorizontal: 16,
-    paddingVertical: 16,
-    borderRadius: 12,
-    marginBottom: 8,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 1,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f3f4f6',
   },
   settingsItemLeft: {
     flexDirection: 'row',
@@ -570,7 +456,7 @@ const styles = StyleSheet.create({
   },
   settingsItemTitle: {
     fontSize: 16,
-    color: '#1f2937',
+    color: '#374151',
     marginLeft: 12,
   },
   modalContainer: {
@@ -594,22 +480,12 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#1f2937',
   },
-  modalSaveButton: {
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-    backgroundColor: '#2563eb',
-    borderRadius: 8,
-  },
-  modalSaveButtonText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#ffffff',
-  },
   modalContent: {
     flex: 1,
+    padding: 20,
   },
   calendarContainer: {
-    padding: 20,
+    flex: 1,
   },
   calendarTitle: {
     fontSize: 20,
@@ -625,8 +501,8 @@ const styles = StyleSheet.create({
   calendarPlaceholder: {
     alignItems: 'center',
     paddingVertical: 40,
-    backgroundColor: '#f8fafc',
-    borderRadius: 16,
+    backgroundColor: '#f9fafb',
+    borderRadius: 12,
     marginBottom: 24,
   },
   calendarPlaceholderText: {
@@ -634,16 +510,15 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#6b7280',
     marginTop: 16,
-    marginBottom: 8,
   },
   calendarPlaceholderSubtext: {
     fontSize: 14,
     color: '#9ca3af',
+    marginTop: 4,
     textAlign: 'center',
-    paddingHorizontal: 20,
   },
   availabilityTypes: {
-    marginTop: 16,
+    marginTop: 20,
   },
   availabilityTypesTitle: {
     fontSize: 16,
@@ -664,6 +539,6 @@ const styles = StyleSheet.create({
   },
   availabilityTypeText: {
     fontSize: 14,
-    color: '#1f2937',
+    color: '#374151',
   },
 });

@@ -9,7 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { useAuth } from "../hooks/useAuth-simple";
+import { useAuth } from "../hooks/useAuth";
 import { Redirect } from "wouter";
 
 interface LoginData {
@@ -43,7 +43,7 @@ export default function AuthPage() {
   // Gestion du thème depuis localStorage
   useEffect(() => {
     const savedTheme = localStorage.getItem("theme") || "light";
-    
+
     if (savedTheme === "dark") {
       document.documentElement.classList.add("dark");
     } else if (savedTheme === "light") {
@@ -102,7 +102,7 @@ export default function AuthPage() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-green-50 flex items-center justify-center p-4">
       <div className="w-full max-w-4xl grid md:grid-cols-2 gap-8 items-center">
-        
+
         {/* Section Hero */}
         <div className="text-center md:text-left space-y-6">
           <div className="space-y-4">
@@ -113,7 +113,7 @@ export default function AuthPage() {
               La plateforme intelligente qui connecte les infirmiers aux établissements de santé
             </p>
           </div>
-          
+
           <div className="space-y-4">
             <div className="flex items-center space-x-3">
               <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
@@ -147,7 +147,7 @@ export default function AuthPage() {
                 <TabsTrigger value="login">Connexion</TabsTrigger>
                 <TabsTrigger value="register">Inscription</TabsTrigger>
               </TabsList>
-              
+
               {/* Formulaire de connexion */}
               <TabsContent value="login" className="space-y-4">
                 <form onSubmit={handleLogin} className="space-y-4">
@@ -171,16 +171,16 @@ export default function AuthPage() {
                       onChange={(e) => setLoginData({ ...loginData, password: e.target.value })}
                     />
                   </div>
-                  <Button 
-                    type="submit" 
-                    className="w-full" 
+                  <Button
+                    type="submit"
+                    className="w-full"
                     disabled={isLoginLoading}
                   >
                     {isLoginLoading ? "Connexion..." : "Se connecter"}
                   </Button>
                 </form>
               </TabsContent>
-              
+
               {/* Formulaire d'inscription */}
               <TabsContent value="register" className="space-y-4">
                 <form onSubmit={handleRegister} className="space-y-4">
@@ -354,9 +354,9 @@ export default function AuthPage() {
                     </div>
                   )}
 
-                  <Button 
-                    type="submit" 
-                    className="w-full" 
+                  <Button
+                    type="submit"
+                    className="w-full"
                     disabled={isRegisterLoading}
                   >
                     {isRegisterLoading ? "Inscription..." : "S'inscrire"}

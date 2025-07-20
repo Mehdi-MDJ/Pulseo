@@ -2,7 +2,7 @@
  * ==============================================================================
  * NurseLink AI - Routes Principales
  * ==============================================================================
- * 
+ *
  * Point d'entrée pour toutes les routes de l'application
  * Architecture modulaire avec services intégrés
  * ==============================================================================
@@ -10,8 +10,6 @@
 
 import type { Express } from "express";
 import { createServer, type Server } from "http";
-import { setupAuthentication } from "../services/authService";
-import { setupLocalAuthentication } from "../services/localAuthService";
 import { storage } from "../services/storageService";
 
 // Import des routes modulaires
@@ -42,11 +40,13 @@ declare module 'express-session' {
 export async function registerRoutes(app: Express): Promise<Server> {
   console.log("🔗 Enregistrement des routes et services...");
 
-  // Utilisation de l'authentification locale par défaut
-  console.log("🔐 Configuration authentification locale (email/mot de passe)");
-  await setupLocalAuthentication(app);
-  
-  // Les routes d'authentification sont configurées dans setupLocalAuthentication
+  // Configuration de l'authentification JWT
+  console.log("🔐 Configuration authentification JWT");
+
+  // Routes d'authentification JWT
+  app.use("/api/auth", authRoutes);
+
+  // Les autres routes
   app.use("/api/profiles", profileRoutes);
   app.use("/api/missions", missionRoutes);
   app.use("/api/ai", aiRoutes);
@@ -69,7 +69,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post('/api/matching/test', async (req, res) => {
     try {
       console.log('🎯 Test matching intelligent exécuté');
-      
+
       const mockMatches = [
         {
           name: "Sophie Martin",
@@ -78,7 +78,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           factors: ["Spécialisation correspondante", "Expérience 5 ans", "Note excellente (4.8/5)"]
         },
         {
-          name: "Pierre Dubois", 
+          name: "Pierre Dubois",
           score: 87,
           distance: 5.1,
           factors: ["Spécialisation correspondante", "Certification BLS", "À proximité"]
@@ -96,7 +96,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           factors: ["Spécialisation correspondante", "Disponible immédiatement"]
         }
       ];
-      
+
       res.json({
         success: true,
         message: "Test de matching réalisé avec succès",
@@ -105,7 +105,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
     } catch (error: any) {
       console.error("❌ Erreur test matching:", error);
-      res.status(500).json({ 
+      res.status(500).json({
         success: false,
         error: "Erreur lors du test de matching"
       });
@@ -116,9 +116,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const missionId = parseInt(req.params.id);
       const criteria = req.body;
-      
+
       console.log(`🎯 Matching pour mission ${missionId} avec critères:`, criteria);
-      
+
       const mockMatches = [
         {
           nurseId: 1,
@@ -165,7 +165,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
     } catch (error: any) {
       console.error("❌ Erreur matching mission:", error);
-      res.status(500).json({ 
+      res.status(500).json({
         success: false,
         error: "Erreur lors du matching"
       });
@@ -175,7 +175,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post('/api/missions/publish', async (req, res) => {
     try {
       console.log('📝 Publication mission avec matching automatique');
-      
+
       const missionData = req.body;
       const mockMission = {
         id: Math.floor(Math.random() * 1000) + 1,
@@ -222,7 +222,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       ].slice(0, missionData.maxCandidates || 10);
 
       console.log(`✅ Mission ${mockMission.id} publiée, ${mockMatches.length} candidats notifiés`);
-      
+
       res.json({
         ...mockMission,
         matchingResults: mockMatches
@@ -230,7 +230,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
     } catch (error: any) {
       console.error("❌ Erreur publication mission:", error);
-      res.status(500).json({ 
+      res.status(500).json({
         success: false,
         message: "Erreur lors de la publication"
       });
@@ -341,7 +341,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         description: "Mission longue durée en service pédiatrique"
       }
     ];
-    
+
     res.json(demoMissions);
   });
 
@@ -349,7 +349,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post('/api/matching/test', async (req, res) => {
     try {
       console.log('🎯 Test matching intelligent exécuté');
-      
+
       const mockMatches = [
         {
           name: "Sophie Martin",
@@ -358,7 +358,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           factors: ["Spécialisation correspondante", "Expérience 5 ans", "Note excellente (4.8/5)"]
         },
         {
-          name: "Pierre Dubois", 
+          name: "Pierre Dubois",
           score: 87,
           distance: 5.1,
           factors: ["Spécialisation correspondante", "Certification BLS", "À proximité"]
@@ -376,7 +376,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           factors: ["Spécialisation correspondante", "Disponible immédiatement"]
         }
       ];
-      
+
       res.json({
         success: true,
         message: "Test de matching réalisé avec succès",
@@ -385,7 +385,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
     } catch (error: any) {
       console.error("❌ Erreur test matching:", error);
-      res.status(500).json({ 
+      res.status(500).json({
         success: false,
         error: "Erreur lors du test de matching"
       });
@@ -396,9 +396,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const missionId = parseInt(req.params.id);
       const criteria = req.body;
-      
+
       console.log(`🎯 Matching pour mission ${missionId} avec critères:`, criteria);
-      
+
       const mockMatches = [
         {
           nurseId: 1,
@@ -445,7 +445,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
     } catch (error: any) {
       console.error("❌ Erreur matching mission:", error);
-      res.status(500).json({ 
+      res.status(500).json({
         success: false,
         error: "Erreur lors du matching"
       });
@@ -455,7 +455,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post('/api/missions/publish', async (req, res) => {
     try {
       console.log('📝 Publication mission avec matching automatique');
-      
+
       const missionData = req.body;
       const mockMission = {
         id: Math.floor(Math.random() * 1000) + 1,
@@ -502,7 +502,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       ].slice(0, missionData.maxCandidates || 10);
 
       console.log(`✅ Mission ${mockMission.id} publiée, ${mockMatches.length} candidats notifiés`);
-      
+
       res.json({
         ...mockMission,
         matchingResults: mockMatches
@@ -510,7 +510,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
     } catch (error: any) {
       console.error("❌ Erreur publication mission:", error);
-      res.status(500).json({ 
+      res.status(500).json({
         success: false,
         message: "Erreur lors de la publication"
       });
@@ -679,8 +679,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
           });
         }
 
-        res.json({ 
-          success: true, 
+        res.json({
+          success: true,
           message: 'Données de test créées avec succès',
           created: {
             nurses: nurseProfiles.length
@@ -719,7 +719,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         <body>
           <div class="container">
             <h1>🏥 NurseLink AI - Test Local</h1>
-            
+
             <div class="info">
               <strong>Mode Test Activé</strong><br>
               Utilisez ces outils pour tester l'application complète sans OAuth.
@@ -745,7 +745,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
                 <li>Créez une nouvelle mission via le dashboard</li>
                 <li>Testez le matching IA</li>
               </ul>
-              
+
               <p><strong>2. Test Infirmier :</strong></p>
               <ul>
                 <li>Cliquez "Se connecter comme Infirmier"</li>
@@ -765,15 +765,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
             async function createSampleData() {
               const result = document.getElementById('result');
               result.innerHTML = '<p style="color: #059669;">Création des données en cours...</p>';
-              
+
               try {
                 const response = await fetch('/api/test/create-sample-data', {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/json' }
                 });
-                
+
                 const data = await response.json();
-                
+
                 if (data.success) {
                   result.innerHTML = '<p style="color: #059669;">✅ ' + data.message + '</p>';
                 } else {
@@ -794,7 +794,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/test/auth", (req, res) => {
     res.json({
       id: "local-test-user",
-      email: "test@nurselink.local", 
+      email: "test@nurselink.local",
       firstName: "Test",
       lastName: "User",
       role: "nurse",
@@ -804,7 +804,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Enregistrement des routes modulaires
-  app.use("/api/auth", authRoutes);
   app.use("/api/profiles", profileRoutes);
   app.use("/api/missions", missionRoutes);
   app.use("/api/ai", aiRoutes);
@@ -818,7 +817,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post('/api/demo/missions/publish', async (req: any, res) => {
     try {
       console.log('🚀 Demo publish mission called with data:', req.body);
-      
+
       const mission = {
         id: Date.now(),
         ...req.body,
@@ -827,7 +826,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         createdAt: new Date(),
         updatedAt: new Date()
       };
-      
+
       console.log('✅ Demo mission published successfully:', mission);
       res.json({
         success: true,
@@ -836,9 +835,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
     } catch (error) {
       console.error("❌ Error publishing demo mission:", error);
-      res.status(500).json({ 
+      res.status(500).json({
         success: false,
-        message: "Erreur lors de la publication de la mission" 
+        message: "Erreur lors de la publication de la mission"
       });
     }
   });

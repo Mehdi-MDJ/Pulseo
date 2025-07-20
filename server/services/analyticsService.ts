@@ -2,14 +2,14 @@
  * ==============================================================================
  * NurseLink AI - Service Analytics Prédictives
  * ==============================================================================
- * 
+ *
  * Analytics avancées pour optimisation RH et aide à la décision
  * Fonctionnalités : prévisions, ROI, optimisation, insights métier
  * ==============================================================================
  */
 
 import OpenAI from "openai";
-import { storage } from "../storage";
+import { storage } from "./storageService";
 import type { Mission, NurseProfile, EstablishmentProfile, MissionApplication } from "@shared/schema";
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
@@ -288,17 +288,17 @@ Réponds avec un JSON:
   private calculatePerformanceMetrics(missions: Mission[], applications: MissionApplication[]): PerformanceMetrics {
     const completedMissions = missions.filter(m => m.status === 'completed');
     const avgTimeToFill = 3; // Jours moyens (à calculer avec dates réelles)
-    
+
     return {
       recruitment: {
         averageTimeToFill: avgTimeToFill,
-        successRate: applications.length > 0 ? 
+        successRate: applications.length > 0 ?
           (applications.filter(a => a.status === 'accepted').length / applications.length) * 100 : 0,
         nurseRetentionRate: 85 // À calculer avec données historiques
       },
       quality: {
         averageNurseRating: 4.2, // À calculer avec vraies évaluations
-        missionCompletionRate: missions.length > 0 ? 
+        missionCompletionRate: missions.length > 0 ?
           (completedMissions.length / missions.length) * 100 : 0,
         establishmentSatisfaction: 4.5 // À calculer avec enquêtes
       },
@@ -314,7 +314,7 @@ Réponds avec un JSON:
    * Génération de recommandations personnalisées
    */
   private async generateRecommendations(
-    establishment: EstablishmentProfile, 
+    establishment: EstablishmentProfile,
     metrics: any
   ): Promise<AnalyticsRecommendation[]> {
     const prompt = `Génère des recommandations strategiques pour cet établissement de santé.
@@ -397,7 +397,7 @@ Réponds avec un JSON:
       const specializationCounts: { [key: string]: number } = {};
       missions.forEach(mission => {
         if (mission.specialization) {
-          specializationCounts[mission.specialization] = 
+          specializationCounts[mission.specialization] =
             (specializationCounts[mission.specialization] || 0) + 1;
         }
       });
@@ -438,11 +438,11 @@ Réponds avec un JSON:
   }> {
     try {
       const missions = await storage.getMissionsByEstablishment(establishmentId);
-      
+
       const prompt = `Prédis la demande future en personnel soignant pour les ${weeks} prochaines semaines.
 
 Historique des missions:
-${missions.slice(-20).map(m => 
+${missions.slice(-20).map(m =>
   `- ${m.title} (${m.specialization}, urgence: ${m.urgencyLevel})`
 ).join('\n')}
 

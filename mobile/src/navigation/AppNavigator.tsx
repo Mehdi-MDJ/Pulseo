@@ -13,6 +13,7 @@ import AvailabilityScreen from '../screens/AvailabilityScreen';
 import SettingsScreen from '../screens/SettingsScreen';
 import HelpScreen from '../screens/HelpScreen';
 import MissionDetailScreen from '../screens/MissionDetailScreen';
+import ApplicationsScreen from '../screens/ApplicationsScreen';
 
 const Stack = createStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -93,6 +94,7 @@ export default function AppNavigator() {
       <Stack.Screen name="Settings" component={SettingsScreen} />
       <Stack.Screen name="Help" component={HelpScreen} />
       <Stack.Screen name="MissionDetail" component={MissionDetailScreen} />
+      <Stack.Screen name="Applications" component={ApplicationsScreen} />
     </Stack.Navigator>
   );
 }

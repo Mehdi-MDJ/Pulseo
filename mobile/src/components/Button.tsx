@@ -6,11 +6,11 @@ import {
   ViewStyle,
   TextStyle,
   ActivityIndicator,
+  Pressable,
+  Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { colors } from '../theme/colors';
-import { spacing } from '../theme/spacing';
-import { typography } from '../theme/typography';
+import { designSystem, createButtonStyle } from '../theme/designSystem';
 
 interface ButtonProps {
   title: string;
@@ -23,6 +23,8 @@ interface ButtonProps {
   iconPosition?: 'left' | 'right';
   style?: ViewStyle;
   textStyle?: TextStyle;
+  accessibilityLabel?: string;
+  accessibilityHint?: string;
 }
 
 export default function Button({
@@ -36,108 +38,33 @@ export default function Button({
   iconPosition = 'left',
   style,
   textStyle,
+  accessibilityLabel,
+  accessibilityHint,
 }: ButtonProps) {
-  const getButtonStyle = (): ViewStyle => {
-    const baseStyle: ViewStyle = {
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'center',
-      borderRadius: spacing.borderRadius.md,
-      borderWidth: variant === 'outline' ? 1 : 0,
-    };
+  const buttonStyle = createButtonStyle(variant, size, disabled);
+  const iconSize = size === 'small' ? 16 : size === 'large' ? 24 : 20;
 
-    // Taille
-    switch (size) {
-      case 'small':
-        baseStyle.paddingHorizontal = spacing.md;
-        baseStyle.paddingVertical = spacing.sm;
-        break;
-      case 'large':
-        baseStyle.paddingHorizontal = spacing.xl;
-        baseStyle.paddingVertical = spacing.md;
-        break;
+  const [pressed, setPressed] = React.useState(false);
+
+  const getTextColor = (): string => {
+    if (disabled) return designSystem.text.disabled;
+
+    switch (variant) {
+      case 'primary':
+      case 'secondary':
+      case 'danger':
+        return designSystem.text.inverse;
+      case 'outline':
+        return designSystem.semantic.primary;
+      case 'ghost':
+        return designSystem.text.primary;
       default:
-        baseStyle.paddingHorizontal = spacing.lg;
-        baseStyle.paddingVertical = spacing.sm;
+        return designSystem.text.primary;
     }
-
-    // Variante
-    switch (variant) {
-      case 'primary':
-        baseStyle.backgroundColor = colors.secondary[500];
-        break;
-      case 'secondary':
-        baseStyle.backgroundColor = colors.primary[500];
-        break;
-      case 'outline':
-        baseStyle.backgroundColor = 'transparent';
-        baseStyle.borderColor = colors.secondary[500];
-        break;
-      case 'ghost':
-        baseStyle.backgroundColor = 'transparent';
-        break;
-      case 'danger':
-        baseStyle.backgroundColor = colors.error[500];
-        break;
-    }
-
-    // État désactivé
-    if (disabled) {
-      baseStyle.backgroundColor = colors.border.light;
-      baseStyle.opacity = 0.6;
-    }
-
-    return baseStyle;
-  };
-
-  const getTextStyle = (): TextStyle => {
-    const baseStyle: TextStyle = {
-      fontSize: size === 'small' ? typography.fontSize.sm : typography.fontSize.md,
-      fontWeight: typography.fontWeight.semibold,
-    };
-
-    // Couleur du texte selon la variante
-    switch (variant) {
-      case 'primary':
-      case 'secondary':
-      case 'danger':
-        baseStyle.color = colors.text.inverse;
-        break;
-      case 'outline':
-        baseStyle.color = colors.secondary[500];
-        break;
-      case 'ghost':
-        baseStyle.color = colors.text.primary;
-        break;
-    }
-
-    // État désactivé
-    if (disabled) {
-      baseStyle.color = colors.text.disabled;
-    }
-
-    return baseStyle;
   };
 
   const getIconColor = (): string => {
-    if (disabled) return colors.text.disabled;
-
-    switch (variant) {
-      case 'primary':
-      case 'secondary':
-      case 'danger':
-        return colors.text.inverse;
-      case 'outline':
-        return colors.secondary[500];
-      case 'ghost':
-        return colors.text.primary;
-      default:
-        return colors.text.primary;
-    }
-  };
-
-  const getIconSize = (): number => {
-    return size === 'small' ? 16 : 20;
+    return getTextColor();
   };
 
   const renderIcon = () => {
@@ -145,37 +72,66 @@ export default function Button({
 
     return (
       <Ionicons
-        name={icon}
-        size={getIconSize()}
+        name={icon as any}
+        size={iconSize}
         color={getIconColor()}
         style={{
-          marginLeft: iconPosition === 'right' ? spacing.xs : 0,
-          marginRight: iconPosition === 'left' ? spacing.xs : 0,
+          marginLeft: iconPosition === 'right' ? designSystem.spacing.xs : 0,
+          marginRight: iconPosition === 'left' ? designSystem.spacing.xs : 0,
         }}
       />
     );
   };
 
+  // Feedback visuel tactile
+  const feedbackStyle = pressed
+    ? {
+        opacity: 0.7,
+        transform: [{ scale: 0.97 }],
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.12,
+        shadowRadius: 8,
+        elevation: 4,
+      }
+    : {};
+
   return (
-    <TouchableOpacity
-      style={[getButtonStyle(), style]}
+    <Pressable
+      style={({ pressed: isPressed }) => [buttonStyle, style, isPressed && feedbackStyle]}
       onPress={onPress}
+      onPressIn={() => setPressed(true)}
+      onPressOut={() => setPressed(false)}
       disabled={disabled || loading}
-      activeOpacity={0.8}
+      accessibilityRole="button"
+      accessibilityLabel={accessibilityLabel || title}
+      accessibilityHint={accessibilityHint}
+      accessibilityState={{ disabled: disabled || loading }}
     >
       {loading ? (
         <ActivityIndicator
           size="small"
           color={getIconColor()}
-          style={{ marginRight: spacing.xs }}
+          style={{ marginRight: designSystem.spacing.xs }}
         />
       ) : (
         iconPosition === 'left' && renderIcon()
       )}
 
-      <Text style={[getTextStyle(), textStyle]}>{title}</Text>
+      <Text
+        style={[
+          {
+            fontSize: designSystem.typography.sizes[size === 'small' ? 'sm' : 'md'],
+            fontWeight: designSystem.typography.weights.semibold,
+            color: getTextColor(),
+          },
+          textStyle
+        ]}
+      >
+        {title}
+      </Text>
 
       {iconPosition === 'right' && renderIcon()}
-    </TouchableOpacity>
+    </Pressable>
   );
 }

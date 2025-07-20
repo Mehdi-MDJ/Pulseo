@@ -1,5 +1,5 @@
 import { useQuery, UseQueryOptions } from "@tanstack/react-query";
-import { useAuth } from "./useAuth-simple";
+import { useAuth } from "./useAuth";
 
 interface EstablishmentQueryOptions<T> extends Omit<UseQueryOptions<T>, 'queryKey' | 'queryFn'> {
   enabled?: boolean;

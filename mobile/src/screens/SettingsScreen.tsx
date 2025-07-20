@@ -12,9 +12,11 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
+import { useThemeMode } from '../theme';
 
 export default function SettingsScreen() {
   const navigation = useNavigation();
+  const { mode, setMode } = useThemeMode();
   const [settings, setSettings] = useState({
     notifications: true,
     location: true,
@@ -165,6 +167,32 @@ export default function SettingsScreen() {
             {section.items.map(renderSettingsItem)}
           </View>
         ))}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Apparence</Text>
+          <View style={styles.row}>
+            <Text style={styles.label}>Thème</Text>
+            <View style={styles.themeSwitchRow}>
+              <TouchableOpacity
+                style={[styles.themeButton, mode === 'light' && styles.themeButtonActive]}
+                onPress={() => setMode('light')}
+                accessibilityLabel="Activer le mode clair"
+              >
+                <Ionicons name="sunny" size={20} color={mode === 'light' ? '#fff' : '#1f2937'} />
+                <Text style={[styles.themeButtonText, mode === 'light' && { color: '#fff' }]}>Clair</Text>
+                {mode === 'light' && <Ionicons name="checkmark" size={16} color="#fff" style={{ marginLeft: 4 }} />}
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.themeButton, mode === 'dark' && styles.themeButtonActive]}
+                onPress={() => setMode('dark')}
+                accessibilityLabel="Activer le mode sombre"
+              >
+                <Ionicons name="moon" size={20} color={mode === 'dark' ? '#fff' : '#1f2937'} />
+                <Text style={[styles.themeButtonText, mode === 'dark' && { color: '#fff' }]}>Sombre</Text>
+                {mode === 'dark' && <Ionicons name="checkmark" size={16} color="#fff" style={{ marginLeft: 4 }} />}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
       </ScrollView>
     </SafeAreaView>
   );
@@ -234,5 +262,45 @@ const styles = StyleSheet.create({
   settingsItemSubtitle: {
     fontSize: 14,
     color: '#6b7280',
+  },
+  section: {
+    margin: 20,
+  },
+  sectionTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#1f2937',
+    marginBottom: 12,
+  },
+  row: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  label: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#1f2937',
+    marginRight: 12,
+  },
+  themeSwitchRow: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  themeButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    backgroundColor: '#e5e7eb',
+    marginHorizontal: 4,
+  },
+  themeButtonActive: {
+    backgroundColor: '#2563eb',
+  },
+  themeButtonText: {
+    color: '#1f2937',
+    fontWeight: 'bold',
+    marginLeft: 6,
   },
 });

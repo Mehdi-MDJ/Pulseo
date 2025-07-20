@@ -40,33 +40,135 @@ const environmentSchema = z.object({
   PGPASSWORD: z.string().optional(),
   PGDATABASE: z.string().optional(),
 
-  // Authentification Replit OAuth (optionnelle en mode local)
-  SESSION_SECRET: z.string().min(32, "SESSION_SECRET doit contenir au moins 32 caractères"),
-  REPL_ID: z.string().optional(),
-  ISSUER_URL: z.string().url().default("https://replit.com/oidc"),
-  REPLIT_DOMAINS: z.string().optional(),
+  // NextAuth.js Configuration
+  NEXTAUTH_URL: z.string().url().default("http://localhost:5000"),
+  NEXTAUTH_SECRET: z.string().min(32, "NEXTAUTH_SECRET doit contenir au moins 32 caractères"),
 
-  // Mode développement local
-  LOCAL_DEV_MODE: z.coerce.boolean().default(false),
+  // OAuth Providers
+  GOOGLE_CLIENT_ID: z.string().optional(),
+  GOOGLE_CLIENT_SECRET: z.string().optional(),
+  GITHUB_ID: z.string().optional(),
+  GITHUB_SECRET: z.string().optional(),
 
-  // Intelligence Artificielle OpenAI
+  // Email Configuration (pour Magic Links)
+  EMAIL_SERVER_HOST: z.string().optional(),
+  EMAIL_SERVER_PORT: z.coerce.number().optional(),
+  EMAIL_SERVER_USER: z.string().optional(),
+  EMAIL_SERVER_PASSWORD: z.string().optional(),
+  EMAIL_FROM: z.string().email().optional(),
+
+  // OpenAI Configuration
   OPENAI_API_KEY: z.string().optional(),
 
-  // Configuration optionnelle
+  // Monitoring et Logs
   LOG_LEVEL: z.enum(["error", "warn", "info", "debug"]).default("info"),
-  ENABLE_DETAILED_LOGS: z.coerce.boolean().default(false),
-  ENABLE_RATE_LIMITING: z.coerce.boolean().default(true),
-  MAX_REQUESTS_PER_MINUTE: z.coerce.number().min(1).max(1000).default(100),
+  SENTRY_DSN: z.string().url().optional(),
 
-  // Fonctionnalités IA
-  AI_MATCHING_ENABLED: z.coerce.boolean().default(true),
-  AI_FORECASTING_ENABLED: z.coerce.boolean().default(true),
+  // Rate Limiting
+  RATE_LIMIT_WINDOW_MS: z.coerce.number().default(900000),
+  RATE_LIMIT_MAX_REQUESTS: z.coerce.number().default(100),
+
+  // Redis (optionnel)
+  REDIS_URL: z.string().optional(),
+
+  // Monitoring
+  DATADOG_API_KEY: z.string().optional(),
+  DATADOG_APP_KEY: z.string().optional(),
+
+  // Backup Configuration
+  BACKUP_RETENTION_DAYS: z.coerce.number().default(30),
+  BACKUP_SCHEDULE: z.string().default("0 2 * * *"),
+
+  // Security Headers
+  CSP_NONCE: z.string().optional(),
+  HSTS_MAX_AGE: z.coerce.number().default(31536000),
 });
 
 /**
- * Type TypeScript généré à partir du schéma de validation
+ * Type pour les variables d'environnement validées
  */
 export type Environment = z.infer<typeof environmentSchema>;
+
+/**
+ * Variables d'environnement validées
+ */
+export const env = environmentSchema.parse(process.env);
+
+/**
+ * Configuration de la base de données
+ */
+export const databaseConfig = {
+  url: env.DATABASE_URL,
+  host: env.PGHOST,
+  port: env.PGPORT,
+  user: env.PGUSER,
+  password: env.PGPASSWORD,
+  database: env.PGDATABASE,
+} as const;
+
+/**
+ * Configuration NextAuth.js
+ */
+export const authConfig = {
+  url: env.NEXTAUTH_URL,
+  secret: env.NEXTAUTH_SECRET,
+  google: {
+    clientId: env.GOOGLE_CLIENT_ID,
+    clientSecret: env.GOOGLE_CLIENT_SECRET,
+  },
+  github: {
+    clientId: env.GITHUB_ID,
+    clientSecret: env.GITHUB_SECRET,
+  },
+  email: {
+    host: env.EMAIL_SERVER_HOST,
+    port: env.EMAIL_SERVER_PORT,
+    user: env.EMAIL_SERVER_USER,
+    password: env.EMAIL_SERVER_PASSWORD,
+    from: env.EMAIL_FROM,
+  },
+} as const;
+
+/**
+ * Configuration du monitoring
+ */
+export const monitoringConfig = {
+  logLevel: env.LOG_LEVEL,
+  sentryDsn: env.SENTRY_DSN,
+  datadog: {
+    apiKey: env.DATADOG_API_KEY,
+    appKey: env.DATADOG_APP_KEY,
+  },
+} as const;
+
+/**
+ * Configuration de la sécurité
+ */
+export const securityConfig = {
+  rateLimit: {
+    windowMs: env.RATE_LIMIT_WINDOW_MS,
+    maxRequests: env.RATE_LIMIT_MAX_REQUESTS,
+  },
+  headers: {
+    cspNonce: env.CSP_NONCE,
+    hstsMaxAge: env.HSTS_MAX_AGE,
+  },
+} as const;
+
+/**
+ * Configuration des backups
+ */
+export const backupConfig = {
+  retentionDays: env.BACKUP_RETENTION_DAYS,
+  schedule: env.BACKUP_SCHEDULE,
+} as const;
+
+/**
+ * Helpers pour l'environnement
+ */
+export const isDevelopment = env.NODE_ENV === "development";
+export const isProduction = env.NODE_ENV === "production";
+export const isTest = env.NODE_ENV === "test";
 
 /**
  * Fonction de validation et parsing des variables d'environnement
@@ -82,10 +184,16 @@ function validateEnvironment(): Environment {
       HOST: env.HOST,
       DATABASE_CONNECTED: !!env.DATABASE_URL,
       OPENAI_CONFIGURED: !!env.OPENAI_API_KEY,
-      REPLIT_AUTH_CONFIGURED: !!env.REPL_ID,
-      AI_FEATURES: {
-        matching: env.AI_MATCHING_ENABLED,
-        forecasting: env.AI_FORECASTING_ENABLED,
+      NEXTAUTH_CONFIGURED: !!env.NEXTAUTH_SECRET,
+      OAUTH_PROVIDERS: {
+        google: !!env.GOOGLE_CLIENT_ID,
+        github: !!env.GITHUB_ID,
+        email: !!env.EMAIL_SERVER_HOST,
+      },
+      MONITORING: {
+        logLevel: env.LOG_LEVEL,
+        sentry: !!env.SENTRY_DSN,
+        datadog: !!env.DATADOG_API_KEY,
       },
     });
 
@@ -101,74 +209,10 @@ function validateEnvironment(): Environment {
       console.error(error);
     }
 
-    console.error("\n💡 Vérifiez le fichier .env et consultez .env.example");
+    console.error("\n💡 Vérifiez le fichier .env et consultez env.example");
     process.exit(1);
   }
 }
 
-/**
- * Configuration validée exportée
- * Disponible dans toute l'application
- */
-export const env = validateEnvironment();
-
-/**
- * Helper pour vérifier si on est en mode développement
- */
-export const isDevelopment = env.NODE_ENV === "development";
-
-/**
- * Helper pour vérifier si on est en mode production
- */
-export const isProduction = env.NODE_ENV === "production";
-
-/**
- * Helper pour vérifier si on est en mode test
- */
-export const isTest = env.NODE_ENV === "test";
-
-/**
- * Configuration de la base de données
- */
-export const databaseConfig = {
-  url: env.DATABASE_URL,
-  host: env.PGHOST,
-  port: env.PGPORT,
-  user: env.PGUSER,
-  password: env.PGPASSWORD,
-  database: env.PGDATABASE,
-} as const;
-
-/**
- * Configuration OAuth Replit
- */
-export const authConfig = {
-  sessionSecret: env.SESSION_SECRET,
-  replId: env.REPL_ID || "local-dev-mode",
-  issuerUrl: env.ISSUER_URL,
-  domains: env.REPLIT_DOMAINS?.split(",").map(d => d.trim()) || ["localhost:5000"],
-  localDevMode: env.LOCAL_DEV_MODE,
-} as const;
-
-/**
- * Configuration OpenAI
- */
-export const aiConfig = {
-  apiKey: env.OPENAI_API_KEY || "sk-fake-key-for-development",
-  matchingEnabled: env.AI_MATCHING_ENABLED,
-  forecastingEnabled: env.AI_FORECASTING_ENABLED,
-} as const;
-
-/**
- * Configuration du serveur
- */
-export const serverConfig = {
-  port: env.PORT,
-  host: env.HOST,
-  logLevel: env.LOG_LEVEL,
-  detailedLogs: env.ENABLE_DETAILED_LOGS,
-  rateLimiting: {
-    enabled: env.ENABLE_RATE_LIMITING,
-    maxRequests: env.MAX_REQUESTS_PER_MINUTE,
-  },
-} as const;
+// Validation automatique au démarrage
+validateEnvironment();

@@ -416,7 +416,7 @@ export const absenceForecasts = sqliteTable("absence_forecasts", {
  * Contrats générés automatiquement lors de l'acceptation d'une mission
  */
 export const contracts = sqliteTable("contracts", {
-  id: integer("id").primaryKey({ autoIncrement: true }),
+  id: text("id").primaryKey(),
 
   // Relations
   missionId: integer("mission_id").notNull().references(() => missions.id, { onDelete: "cascade" }),
