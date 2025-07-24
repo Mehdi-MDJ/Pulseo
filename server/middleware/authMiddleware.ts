@@ -11,21 +11,11 @@
 import { Request, Response, NextFunction } from "express"
 import { handlers } from "../lib/auth"
 
-export interface AuthenticatedRequest extends Request {
-  user?: {
-    id: string
-    email: string
-    name: string
-    role: string
-    establishmentId?: string
-  }
-}
-
 /**
  * Middleware d'authentification de base
  * Vérifie si l'utilisateur est connecté
  */
-export const requireAuth = async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+export const requireAuth = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const session = await handlers.GET(req, res)
 
@@ -60,7 +50,7 @@ export const requireAuth = async (req: AuthenticatedRequest, res: Response, next
  * @param roles - Rôles autorisés
  */
 export const requireRole = (roles: string[]) => {
-  return (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+  return (req: Request, res: Response, next: NextFunction) => {
     if (!req.user) {
       return res.status(401).json({
         error: "Non authentifié",
@@ -107,7 +97,7 @@ export const requireNurseOrEstablishment = requireRole(["NURSE", "ESTABLISHMENT"
  * @param resourceType - Type de ressource (mission, profile, etc.)
  */
 export const requireOwnership = (resourceIdField: string, resourceType: string) => {
-  return async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+  return async (req: Request, res: Response, next: NextFunction) => {
     if (!req.user) {
       return res.status(401).json({
         error: "Non authentifié",
@@ -189,7 +179,7 @@ export const requireOwnership = (resourceIdField: string, resourceType: string) 
 /**
  * Middleware pour vérifier si l'utilisateur a un profil complet
  */
-export const requireCompleteProfile = async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+export const requireCompleteProfile = async (req: Request, res: Response, next: NextFunction) => {
   if (!req.user) {
     return res.status(401).json({
       error: "Non authentifié",
@@ -239,7 +229,7 @@ export const requireCompleteProfile = async (req: AuthenticatedRequest, res: Res
 /**
  * Middleware pour vérifier les permissions d'établissement
  */
-export const requireEstablishmentAccess = async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+export const requireEstablishmentAccess = async (req: Request, res: Response, next: NextFunction) => {
   if (!req.user) {
     return res.status(401).json({
       error: "Non authentifié",

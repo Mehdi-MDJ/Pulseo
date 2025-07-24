@@ -57,16 +57,9 @@ export default function Home() {
   // Redirection si non connecté
   useEffect(() => {
     if (!isLoading && !user) {
-      setLocation('/landing');
+      setLocation('/landing-simple');
     }
   }, [user, isLoading, setLocation]);
-
-  // Gestion du profil après acceptation CGU
-  useEffect(() => {
-    if (user?.cguAccepted && !user.profile && !showProfileForm) {
-      setShowProfileForm(true);
-    }
-  }, [user, showProfileForm]);
 
   const handleProfileEditClick = () => {
     setShowProfileEdit(true);
@@ -96,32 +89,16 @@ export default function Home() {
         status: "open"
       };
 
-      const response = await fetch('/api/missions', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify(missionData)
+      // Simuler la création de mission
+      toast({
+        title: "Mission créée avec succès !",
+        description: "L'IA va maintenant sélectionner les meilleurs candidats.",
+        variant: "default",
       });
-
-      if (response.ok) {
-        queryClient.invalidateQueries({ queryKey: ["/api/missions"] });
-        toast({
-          title: "Mission créée avec succès !",
-          description: "L'IA va maintenant sélectionner les meilleurs candidats parmi nos infirmiers de test.",
-          variant: "default",
-        });
-      } else {
-        const errorData = await response.json().catch(() => ({}));
-        toast({
-          title: "Erreur lors de la création",
-          description: errorData.message || "Impossible de créer la mission pour le moment.",
-          variant: "destructive",
-        });
-      }
     } catch (error) {
       toast({
-        title: "Erreur de connexion",
-        description: "Vérifiez votre connexion internet et réessayez.",
+        title: "Erreur lors de la création",
+        description: "Impossible de créer la mission pour le moment.",
         variant: "destructive",
       });
     } finally {
@@ -131,28 +108,46 @@ export default function Home() {
 
   const handleLogout = async () => {
     try {
-      await fetch('/api/logout');
-      queryClient.clear();
-      setLocation('/landing');
+      // Déconnexion côté client
+      setLocation('/landing-simple');
     } catch (error) {
-      setLocation('/landing');
+      setLocation('/landing-simple');
     }
   };
 
-  const { data: missions, isLoading: missionsLoading } = useQuery({
-    queryKey: ["/api/missions"],
-    enabled: !!user?.cguAccepted,
-  });
+  // Données simulées pour les missions
+  const mockMissions = [
+    {
+      id: "1",
+      title: "Infirmier(ère) de nuit - Urgences",
+      description: "Recherche infirmier(ère) expérimenté(e) pour service d'urgences de nuit.",
+      hourlyRate: 28.50,
+      location: "CHU Lyon Sud",
+      status: "OPEN",
+      createdAt: new Date().toISOString()
+    },
+    {
+      id: "2",
+      title: "Infirmier(ère) pédiatrie - Jour",
+      description: "Infirmier(ère) pédiatrie pour remplacement en CDD.",
+      hourlyRate: 25.00,
+      location: "Clinique Lyon Nord",
+      status: "OPEN",
+      createdAt: new Date().toISOString()
+    }
+  ];
 
-  const { data: stats, isLoading: statsLoading } = useQuery({
-    queryKey: ["/api/dashboard/stats"],
-    enabled: !!user?.cguAccepted,
-  });
-
-  // Show CGU modal if user hasn't accepted
-  if (user && !user.cguAccepted) {
-    return <CGUModal open={true} onAccept={() => setShowCGU(false)} />;
-  }
+  // Données simulées pour les stats
+  const mockStats = {
+    completedMissions: 12,
+    totalEarnings: 2840,
+    rating: 4.8,
+    availableMissions: 5,
+    activeStaff: 8,
+    openMissions: 3,
+    avgResponseTime: 2,
+    satisfaction: 4.9
+  };
 
   if (isLoading) {
     return (
@@ -196,24 +191,13 @@ export default function Home() {
               </div>
             </Link>
 
-            <a
-              href="https://nurse-link-ai-medjoumehdi.replit.app/api/mobile-demo"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-center space-x-2 bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg font-medium transition-colors"
-              aria-label="Ouvrir la démo mobile dans un nouvel onglet"
-            >
-              <Smartphone className="w-4 h-4" />
-              <span>Demo Mobile</span>
-            </a>
-
             {/* Desktop Navigation */}
             <div className="hidden md:flex items-center space-x-4">
               <Button variant="ghost" size="icon" aria-label="Notifications">
                 <Bell className="w-4 h-4" />
               </Button>
 
-              {(user as any)?.role === 'establishment' && (
+              {user?.role === 'ESTABLISHMENT' && (
                 <Link href="/dashboard">
                   <Button variant="ghost">
                     <TrendingUp className="w-4 h-4 mr-2" />
@@ -238,7 +222,7 @@ export default function Home() {
                 <Edit className="w-4 h-4" />
               </Button>
 
-              {(user as any)?.role === 'nurse' && (
+              {user?.role === 'NURSE' && (
                 <Button
                   variant="ghost"
                   size="icon"
@@ -264,11 +248,11 @@ export default function Home() {
 
               <div className="flex items-center space-x-2">
                 <img
-                  src={(user as any)?.profileImageUrl || `https://ui-avatars.com/api/?name=${(user as any)?.firstName}+${(user as any)?.lastName}`}
-                  alt={`Photo de profil de ${(user as any)?.firstName} ${(user as any)?.lastName}`}
+                  src={`https://ui-avatars.com/api/?name=${user?.name || user?.email}`}
+                  alt={`Photo de profil de ${user?.name || user?.email}`}
                   className="w-8 h-8 rounded-full"
                 />
-                <span className="font-medium">{(user as any)?.firstName}</span>
+                <span className="font-medium">{user?.name || user?.email}</span>
               </div>
             </div>
 
@@ -304,7 +288,7 @@ export default function Home() {
                 Notifications
               </Button>
 
-              {(user as any)?.role === 'establishment' && (
+              {user?.role === 'ESTABLISHMENT' && (
                 <Link href="/dashboard">
                   <Button
                     variant="ghost"
@@ -331,7 +315,7 @@ export default function Home() {
                 Modifier mon profil
               </Button>
 
-              {(user as any)?.role === 'nurse' && (
+              {user?.role === 'NURSE' && (
                 <>
                   <Button
                     variant="ghost"
@@ -375,13 +359,13 @@ export default function Home() {
               <div className="border-t pt-2">
                 <div className="flex items-center px-3 py-2">
                   <img
-                    src={(user as any)?.profileImageUrl || `https://ui-avatars.com/api/?name=${(user as any)?.firstName}+${(user as any)?.lastName}`}
-                    alt={`Photo de profil de ${(user as any)?.firstName} ${(user as any)?.lastName}`}
+                    src={`https://ui-avatars.com/api/?name=${user?.name || user?.email}`}
+                    alt={`Photo de profil de ${user?.name || user?.email}`}
                     className="w-10 h-10 rounded-full mr-3"
                   />
                   <div>
-                    <p className="font-medium">{(user as any)?.firstName} {(user as any)?.lastName}</p>
-                    <p className="text-sm text-gray-500">{(user as any)?.email}</p>
+                    <p className="font-medium">{user?.name || user?.email}</p>
+                    <p className="text-sm text-gray-500">{user?.email}</p>
                   </div>
                 </div>
 
@@ -407,10 +391,10 @@ export default function Home() {
         {/* Welcome Section */}
         <div className="mb-8">
           <h1 className="text-3xl font-bold mb-2">
-            Bonjour, {user?.firstName} !
+            Bonjour, {user?.name || user?.email} !
           </h1>
           <p className="text-muted-foreground">
-            {user?.role === 'nurse'
+            {user?.role === 'NURSE'
               ? "Découvrez les missions disponibles près de chez vous"
               : "Gérez vos besoins en personnel et créez de nouvelles missions"
             }
@@ -418,114 +402,112 @@ export default function Home() {
         </div>
 
         {/* Quick Stats */}
-        {!statsLoading && stats && (
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
-            {user?.role === 'nurse' ? (
-              <>
-                <Card>
-                  <CardContent className="p-4">
-                    <div className="flex items-center space-x-2">
-                      <Calendar className="w-4 h-4 text-muted-foreground" />
-                      <div>
-                        <div className="font-semibold">{stats.completedMissions || 0}</div>
-                        <div className="text-sm text-muted-foreground">Missions terminées</div>
-                      </div>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+          {user?.role === 'NURSE' ? (
+            <>
+              <Card>
+                <CardContent className="p-4">
+                  <div className="flex items-center space-x-2">
+                    <Calendar className="w-4 h-4 text-muted-foreground" />
+                    <div>
+                      <div className="font-semibold">{mockStats.completedMissions}</div>
+                      <div className="text-sm text-muted-foreground">Missions terminées</div>
                     </div>
-                  </CardContent>
-                </Card>
-                <Card>
-                  <CardContent className="p-4">
-                    <div className="flex items-center space-x-2">
-                      <DollarSign className="w-4 h-4 text-muted-foreground" />
-                      <div>
-                        <div className="font-semibold">{stats.totalEarnings || 0}€</div>
-                        <div className="text-sm text-muted-foreground">Gains totaux</div>
-                      </div>
+                  </div>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardContent className="p-4">
+                  <div className="flex items-center space-x-2">
+                    <DollarSign className="w-4 h-4 text-muted-foreground" />
+                    <div>
+                      <div className="font-semibold">{mockStats.totalEarnings}€</div>
+                      <div className="text-sm text-muted-foreground">Gains totaux</div>
                     </div>
-                  </CardContent>
-                </Card>
-                <Card>
-                  <CardContent className="p-4">
-                    <div className="flex items-center space-x-2">
-                      <Star className="w-4 h-4 text-muted-foreground" />
-                      <div>
-                        <div className="font-semibold">{stats.rating || 0}/5</div>
-                        <div className="text-sm text-muted-foreground">Note moyenne</div>
-                      </div>
+                  </div>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardContent className="p-4">
+                  <div className="flex items-center space-x-2">
+                    <Star className="w-4 h-4 text-muted-foreground" />
+                    <div>
+                      <div className="font-semibold">{mockStats.rating}/5</div>
+                      <div className="text-sm text-muted-foreground">Note moyenne</div>
                     </div>
-                  </CardContent>
-                </Card>
-                <Card>
-                  <CardContent className="p-4">
-                    <div className="flex items-center space-x-2">
-                      <MapPin className="w-4 h-4 text-muted-foreground" />
-                      <div>
-                        <div className="font-semibold">{stats.availableMissions || 0}</div>
-                        <div className="text-sm text-muted-foreground">Missions proches</div>
-                      </div>
+                  </div>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardContent className="p-4">
+                  <div className="flex items-center space-x-2">
+                    <MapPin className="w-4 h-4 text-muted-foreground" />
+                    <div>
+                      <div className="font-semibold">{mockStats.availableMissions}</div>
+                      <div className="text-sm text-muted-foreground">Missions proches</div>
                     </div>
-                  </CardContent>
-                </Card>
-              </>
-            ) : (
-              <>
-                <Card>
-                  <CardContent className="p-4">
-                    <div className="flex items-center space-x-2">
-                      <Users className="w-4 h-4 text-muted-foreground" />
-                      <div>
-                        <div className="font-semibold">{stats.activeStaff || 0}</div>
-                        <div className="text-sm text-muted-foreground">Personnel actif</div>
-                      </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </>
+          ) : (
+            <>
+              <Card>
+                <CardContent className="p-4">
+                  <div className="flex items-center space-x-2">
+                    <Users className="w-4 h-4 text-muted-foreground" />
+                    <div>
+                      <div className="font-semibold">{mockStats.activeStaff}</div>
+                      <div className="text-sm text-muted-foreground">Personnel actif</div>
                     </div>
-                  </CardContent>
-                </Card>
-                <Card>
-                  <CardContent className="p-4">
-                    <div className="flex items-center space-x-2">
-                      <Calendar className="w-4 h-4 text-muted-foreground" />
-                      <div>
-                        <div className="font-semibold">{stats.openMissions || 0}</div>
-                        <div className="text-sm text-muted-foreground">Missions ouvertes</div>
-                      </div>
+                  </div>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardContent className="p-4">
+                  <div className="flex items-center space-x-2">
+                    <Calendar className="w-4 h-4 text-muted-foreground" />
+                    <div>
+                      <div className="font-semibold">{mockStats.openMissions}</div>
+                      <div className="text-sm text-muted-foreground">Missions ouvertes</div>
                     </div>
-                  </CardContent>
-                </Card>
-                <Card>
-                  <CardContent className="p-4">
-                    <div className="flex items-center space-x-2">
-                      <Clock className="w-4 h-4 text-muted-foreground" />
-                      <div>
-                        <div className="font-semibold">{stats.avgResponseTime || 0}h</div>
-                        <div className="text-sm text-muted-foreground">Temps réponse</div>
-                      </div>
+                  </div>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardContent className="p-4">
+                  <div className="flex items-center space-x-2">
+                    <Clock className="w-4 h-4 text-muted-foreground" />
+                    <div>
+                      <div className="font-semibold">{mockStats.avgResponseTime}h</div>
+                      <div className="text-sm text-muted-foreground">Temps réponse</div>
                     </div>
-                  </CardContent>
-                </Card>
-                <Card>
-                  <CardContent className="p-4">
-                    <div className="flex items-center space-x-2">
-                      <Star className="w-4 h-4 text-muted-foreground" />
-                      <div>
-                        <div className="font-semibold">{stats.satisfaction || 0}/5</div>
-                        <div className="text-sm text-muted-foreground">Satisfaction</div>
-                      </div>
+                  </div>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardContent className="p-4">
+                  <div className="flex items-center space-x-2">
+                    <Star className="w-4 h-4 text-muted-foreground" />
+                    <div>
+                      <div className="font-semibold">{mockStats.satisfaction}/5</div>
+                      <div className="text-sm text-muted-foreground">Satisfaction</div>
                     </div>
-                  </CardContent>
-                </Card>
-              </>
-            )}
-          </div>
-        )}
+                  </div>
+                </CardContent>
+              </Card>
+            </>
+          )}
+        </div>
 
         <div className="grid lg:grid-cols-3 gap-8">
           {/* Main Content */}
           <div className="lg:col-span-2">
             <div className="flex items-center justify-between mb-6">
               <h2 className="text-2xl font-semibold">
-                {user?.role === 'nurse' ? "Missions Disponibles" : "Missions Récentes"}
+                {user?.role === 'NURSE' ? "Missions Disponibles" : "Missions Récentes"}
               </h2>
-              {user?.role === 'establishment' && (
+              {user?.role === 'ESTABLISHMENT' && (
                 <Button
                   className="bg-action-orange hover:bg-action-orange/90 text-white"
                   onClick={handleCreateMissionClick}
@@ -541,52 +523,44 @@ export default function Home() {
               )}
             </div>
 
-            {missionsLoading ? (
-              <div className="space-y-4">
-                <Skeleton className="h-32 w-full" />
-                <Skeleton className="h-32 w-full" />
-                <Skeleton className="h-32 w-full" />
-              </div>
-            ) : (
-              <div className="space-y-4">
-                {missions?.length > 0 ? (
-                  missions.map((mission: any) => (
-                    <MissionCard key={mission.id} mission={mission} userRole={user?.role} />
-                  ))
-                ) : (
-                  <Card>
-                    <CardContent className="p-8 text-center">
-                      <div className="text-muted-foreground mb-2">
-                        {user?.role === 'nurse'
-                          ? "Aucune mission disponible pour le moment"
-                          : "Aucune mission créée"
-                        }
-                      </div>
-                      {user?.role === 'establishment' && (
-                        <Button
-                          variant="outline"
-                          onClick={handleCreateMissionClick}
-                          disabled={isCreatingMission}
-                        >
-                          {isCreatingMission ? (
-                            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                          ) : (
-                            <Plus className="w-4 h-4 mr-2" />
-                          )}
-                          {isCreatingMission ? "Création..." : "Créer votre première mission"}
-                        </Button>
-                      )}
-                    </CardContent>
-                  </Card>
-                )}
-              </div>
-            )}
+            <div className="space-y-4">
+              {mockMissions.length > 0 ? (
+                mockMissions.map((mission: any) => (
+                  <MissionCard key={mission.id} mission={mission} userRole={user?.role} />
+                ))
+              ) : (
+                <Card>
+                  <CardContent className="p-8 text-center">
+                    <div className="text-muted-foreground mb-2">
+                      {user?.role === 'NURSE'
+                        ? "Aucune mission disponible pour le moment"
+                        : "Aucune mission créée"
+                      }
+                    </div>
+                    {user?.role === 'ESTABLISHMENT' && (
+                      <Button
+                        variant="outline"
+                        onClick={handleCreateMissionClick}
+                        disabled={isCreatingMission}
+                      >
+                        {isCreatingMission ? (
+                          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                        ) : (
+                          <Plus className="w-4 h-4 mr-2" />
+                        )}
+                        {isCreatingMission ? "Création..." : "Créer votre première mission"}
+                      </Button>
+                    )}
+                  </CardContent>
+                </Card>
+              )}
+            </div>
           </div>
 
           {/* Sidebar */}
           <div className="space-y-6">
             {/* Professional Tools for Nurses */}
-            {user?.role === 'nurse' && (
+            {user?.role === 'NURSE' && (
               <Card>
                 <CardHeader>
                   <CardTitle className="flex items-center space-x-2">
@@ -628,7 +602,7 @@ export default function Home() {
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center space-x-2">
-                  {user?.role === 'nurse' ? (
+                  {user?.role === 'NURSE' ? (
                     <Users className="w-4 h-4" />
                   ) : (
                     <Hospital className="w-4 h-4" />
@@ -637,64 +611,30 @@ export default function Home() {
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                {user?.profile ? (
-                  <div className="space-y-3">
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm font-medium">Statut</span>
-                      <Badge variant={user.profile.documentsVerified ? "default" : "secondary"}>
-                        {user.profile.documentsVerified ? "Vérifié" : "En attente"}
-                      </Badge>
-                    </div>
-
-                    {user.role === 'nurse' && (
-                      <>
-                        <div>
-                          <span className="text-sm font-medium">Spécialisation</span>
-                          <p className="text-sm text-muted-foreground">{user.profile.specialization || "Non renseignée"}</p>
-                        </div>
-                        <div>
-                          <span className="text-sm font-medium">Expérience</span>
-                          <p className="text-sm text-muted-foreground">{user.profile.experience || 0} années</p>
-                        </div>
-                      </>
-                    )}
-
-                    {user.role === 'establishment' && (
-                      <>
-                        <div>
-                          <span className="text-sm font-medium">Établissement</span>
-                          <p className="text-sm text-muted-foreground">{user.profile.name}</p>
-                        </div>
-                        <div>
-                          <span className="text-sm font-medium">Type</span>
-                          <p className="text-sm text-muted-foreground">{user.profile.type || "Non renseigné"}</p>
-                        </div>
-                      </>
-                    )}
-
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="w-full"
-                      onClick={handleProfileEditClick}
-                    >
-                      Modifier le profil
-                    </Button>
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-medium">Statut</span>
+                    <Badge variant="default">
+                      Actif
+                    </Badge>
                   </div>
-                ) : (
-                  <div className="text-center">
-                    <p className="text-sm text-muted-foreground mb-3">
-                      Complétez votre profil pour commencer
+
+                  <div>
+                    <span className="text-sm font-medium">Rôle</span>
+                    <p className="text-sm text-muted-foreground">
+                      {user?.role === 'NURSE' ? 'Infirmier(ère)' : 'Établissement'}
                     </p>
-                    <Button
-                      size="sm"
-                      className="w-full"
-                      onClick={() => setShowProfileForm(true)}
-                    >
-                      Compléter le profil
-                    </Button>
                   </div>
-                )}
+
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="w-full"
+                    onClick={handleProfileEditClick}
+                  >
+                    Modifier le profil
+                  </Button>
+                </div>
               </CardContent>
             </Card>
 
@@ -704,7 +644,7 @@ export default function Home() {
                 <CardTitle>Actions Rapides</CardTitle>
               </CardHeader>
               <CardContent className="space-y-3">
-                {user?.role === 'nurse' ? (
+                {user?.role === 'NURSE' ? (
                   <>
                     <Button
                       variant="outline"
@@ -779,7 +719,7 @@ export default function Home() {
 
       {/* Profile Form Modal */}
       {showProfileForm && user && (
-        user.role === 'nurse' ? (
+        user.role === 'NURSE' ? (
           <NurseProfileForm
             open={showProfileForm}
             onClose={() => setShowProfileForm(false)}

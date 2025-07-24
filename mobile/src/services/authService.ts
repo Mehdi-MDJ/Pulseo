@@ -29,16 +29,15 @@ export interface SignUpData {
 
 class AuthService {
   private baseURL = process.env.NODE_ENV === 'production'
-    ? 'https://workspace--5000.replit.dev/api'
-    : 'http://localhost:3000/api';
+    ? 'https://nurselink.ai/api'
+    : 'http://localhost:5000/api';
   private tokenKey = '@nurselink_token';
   private userKey = '@nurselink_user';
 
   // Connexion
   async login(credentials: LoginCredentials): Promise<{ user: User; token: string }> {
     try {
-      // Simulation d'une API - remplacez par votre vraie API
-      const response = await fetch(`${this.baseURL}/auth/login`, {
+      const response = await fetch(`${this.baseURL}/auth/signin`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -47,7 +46,8 @@ class AuthService {
       });
 
       if (!response.ok) {
-        throw new Error('Email ou mot de passe incorrect');
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.message || 'Email ou mot de passe incorrect');
       }
 
       const data = await response.json();
@@ -58,30 +58,8 @@ class AuthService {
 
       return data;
     } catch (error) {
-      // Simulation pour le développement
-      if (credentials.email === 'demo@nurselink.ai' && credentials.password === 'password') {
-        const mockUser: User = {
-          id: '1',
-          firstName: 'Marie',
-          lastName: 'Dubois',
-          email: credentials.email,
-          phone: '+33 6 12 34 56 78',
-          specializations: ['Urgences', 'Cardiologie', 'Pédiatrie'],
-          experience: '5 ans',
-          rating: 4.8,
-          missionsCompleted: 127,
-          level: 8,
-          rank: 'Expert',
-        };
-
-        const mockToken = 'mock_jwt_token_' + Date.now();
-        await this.storeToken(mockToken);
-        await this.storeUser(mockUser);
-
-        return { user: mockUser, token: mockToken };
-      }
-
-      throw new Error('Email ou mot de passe incorrect');
+      console.error('Erreur de connexion:', error);
+      throw new Error('Erreur de connexion. Veuillez réessayer.');
     }
   }
 
@@ -97,7 +75,8 @@ class AuthService {
       });
 
       if (!response.ok) {
-        throw new Error('Erreur lors de la création du compte');
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.message || 'Erreur lors de la création du compte');
       }
 
       const data = await response.json();
@@ -107,26 +86,8 @@ class AuthService {
 
       return data;
     } catch (error) {
-      // Simulation pour le développement
-      const mockUser: User = {
-        id: Date.now().toString(),
-        firstName: signUpData.firstName,
-        lastName: signUpData.lastName,
-        email: signUpData.email,
-        phone: signUpData.phone,
-        specializations: [],
-        experience: '0 an',
-        rating: 0,
-        missionsCompleted: 0,
-        level: 1,
-        rank: 'Débutant',
-      };
-
-      const mockToken = 'mock_jwt_token_' + Date.now();
-      await this.storeToken(mockToken);
-      await this.storeUser(mockUser);
-
-      return { user: mockUser, token: mockToken };
+      console.error('Erreur d\'inscription:', error);
+      throw new Error('Erreur lors de la création du compte. Veuillez réessayer.');
     }
   }
 

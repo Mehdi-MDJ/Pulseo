@@ -154,22 +154,4 @@ router.get('/user', localAuthMiddleware, (req: any, res) => {
   }
 });
 
-// Route de debug pour les statistiques de session (à supprimer en production)
-router.get('/debug/sessions', (req, res) => {
-  try {
-    const stats = getSessionStats();
-    res.json({
-      success: true,
-      stats
-    });
-
-  } catch (error) {
-    console.error('Erreur lors de la récupération des stats:', error);
-    res.status(500).json({
-      error: 'Erreur interne',
-      code: 'STATS_ERROR'
-    });
-  }
-});
-
 export default router;

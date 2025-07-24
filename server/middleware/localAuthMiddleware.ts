@@ -12,16 +12,6 @@ import { Request, Response, NextFunction } from "express";
 import { authConfig } from "../config/environment";
 import { storage } from "../services/storageService";
 
-// Interface pour étendre Request avec user
-interface AuthenticatedRequest extends Request {
-  user?: {
-    id: string;
-    email: string;
-    role: 'establishment' | 'nurse' | 'admin';
-    establishmentId?: string;
-  };
-}
-
 // Sessions actives avec timestamp d'expiration
 interface Session {
   userId: string;
@@ -91,7 +81,7 @@ const LOCAL_DEV_USERS = {
  * Middleware d'authentification locale
  * Simule un utilisateur connecté en mode développement
  */
-export const localAuthMiddleware = async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+export const localAuthMiddleware = async (req: Request, res: Response, next: NextFunction) => {
   // Laisser passer les routes d'authentification
   if (
     req.originalUrl.startsWith('/api/auth/refresh') ||
@@ -119,12 +109,8 @@ export const localAuthMiddleware = async (req: AuthenticatedRequest, res: Respon
 
     const token = authHeader.replace('Bearer ', '');
 
-    // DEBUG : afficher le token reçu et les sessions actives
-    console.log('[DEBUG] Token reçu:', token);
-
     // Utiliser la Map sessions du serveur principal
     const sessions = (global as any).sessions || new Map();
-    console.log('[DEBUG] Sessions actives (serveur principal):', Array.from(sessions.keys()));
 
     // Vérifier si le token existe dans les sessions du serveur principal
     const session = sessions.get(token);
@@ -288,10 +274,6 @@ export const setupLocalAuthRoutes = (app: any) => {
 
     const { token: sessionToken, expiresAt } = createSession(user);
 
-    // DEBUG : afficher le token généré et les sessions actives
-    console.log('[DEBUG][LOGIN] Token généré:', sessionToken);
-    console.log('[DEBUG][LOGIN] Sessions actives:', Array.from(activeSessions.keys()));
-
     res.cookie('sessionToken', sessionToken, {
       httpOnly: false,
       secure: false,
@@ -367,9 +349,6 @@ export const setupLocalAuthRoutes = (app: any) => {
     // Supprimer l'ancienne session et créer la nouvelle
     sessions.delete(sessionToken);
     sessions.set(newToken, newSession);
-
-    console.log('[DEBUG][REFRESH] Nouveau token généré:', newToken);
-    console.log('[DEBUG][REFRESH] Sessions actives:', Array.from(sessions.keys()));
 
     res.json({
       success: true,

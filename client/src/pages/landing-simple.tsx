@@ -1,4 +1,5 @@
 import React from 'react';
+import { Link } from 'wouter';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -18,10 +19,10 @@ export default function LandingSimple() {
           </div>
           <div className="flex items-center space-x-4">
             <Button variant="ghost" asChild>
-              <a href="/auth">Connexion</a>
+              <Link href="/auth">Connexion</Link>
             </Button>
             <Button asChild>
-              <a href="/establishment-signup">Inscription</a>
+              <Link href="/establishment-signup">Inscription</Link>
             </Button>
           </div>
         </nav>
@@ -44,13 +45,13 @@ export default function LandingSimple() {
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
             <Button size="lg" asChild>
-              <a href="/establishment-signup">
+              <Link href="/establishment-signup">
                 Commencer maintenant
                 <ArrowRight className="w-4 h-4 ml-2" />
-              </a>
+              </Link>
             </Button>
             <Button size="lg" variant="outline" asChild>
-              <a href="/auth">Voir la démo</a>
+              <Link href="/auth">Voir la démo</Link>
             </Button>
           </div>
         </div>

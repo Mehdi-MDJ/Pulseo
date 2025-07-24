@@ -3,1403 +3,323 @@
  * NurseLink AI - Service de Stockage
  * ==============================================================================
  *
- * Service centralisé pour toutes les opérations de base de données
- * Implémente une interface claire avec gestion d'erreurs robuste
- *
- * Architecture :
- * - Interface IStorage pour abstraction
- * - DatabaseStorage avec Drizzle ORM
- * - Gestion d'erreurs typées
- * - Logging structuré des opérations
- * - Validation des données avec Zod
+ * Service centralisé pour les interactions avec la base de données
+ * Utilise Prisma comme ORM
  * ==============================================================================
  */
 
-import { eq, and, desc, asc, count, sql } from "drizzle-orm";
-import { getDb } from "../db";
-import {
-  users,
-  nurseProfiles,
-  establishmentProfiles,
-  missions,
-  missionApplications,
-  documents,
-  invoices,
-  absenceForecasts,
-  missionTemplates,
-  contracts,
-  type User,
-  type UpsertUser,
-  type NurseProfile,
-  type EstablishmentProfile,
-  type Mission,
-  type MissionApplication,
-  type Document,
-  type Invoice,
-  type AbsenceForecast,
-  type MissionTemplate,
-  type InsertNurseProfile,
-  type InsertEstablishmentProfile,
-  type InsertMission,
-  type InsertMissionApplication,
-  type InsertMissionTemplate,
-  insertNurseProfileSchema,
-  insertEstablishmentProfileSchema,
-  insertMissionSchema,
-  insertMissionApplicationSchema,
-  insertMissionTemplateSchema,
-} from "@shared/schema";
-import { isDevelopment } from "../config/environment";
-import { cacheService } from "./cacheService";
+import { prisma } from "../lib/prisma"
+import { MissionStatus, ApplicationStatus, UserRole } from "@prisma/client"
 
-/**
- * Interface définissant toutes les opérations de stockage
- * Cette interface permet l'abstraction et facilite les tests
- */
-export interface IStorage {
-  // ==================== OPÉRATIONS UTILISATEURS ====================
-  // IMPORTANT: Ces opérations sont obligatoires pour Replit Auth
-  getUser(id: string): Promise<User | undefined>;
-  getUserByEmail(email: string): Promise<User | undefined>;
-  createUser(userData: any): Promise<User>;
-  upsertUser(user: UpsertUser): Promise<User>;
-  acceptCGU(userId: string, role: string): Promise<User>;
-
-  // ==================== OPÉRATIONS PROFILS ====================
-  getNurseProfile(userId: string): Promise<NurseProfile | undefined>;
-  getEstablishmentProfile(userId: string, establishmentId?: number): Promise<EstablishmentProfile | undefined>;
-  getEstablishmentBySiret(siret: string): Promise<EstablishmentProfile | undefined>;
-  createOrUpdateNurseProfile(profile: InsertNurseProfile): Promise<NurseProfile>;
-  createOrUpdateEstablishmentProfile(profile: InsertEstablishmentProfile): Promise<EstablishmentProfile>;
-
-  // ==================== OPÉRATIONS MISSIONS ====================
-  createMission(mission: InsertMission): Promise<Mission>;
-  getMission(id: number): Promise<Mission | undefined>;
-  getMissionsForNurse(nurseId: number, filters?: MissionFilters): Promise<Mission[]>;
-  getMissionsForEstablishment(establishmentId: number, filters?: MissionFilters): Promise<Mission[]>;
-  updateMissionStatus(missionId: number, status: string): Promise<Mission | undefined>;
-  searchMissions(criteria: SearchCriteria): Promise<Mission[]>;
-
-  // ==================== OPÉRATIONS CANDIDATURES ====================
-  createMissionApplication(application: InsertMissionApplication): Promise<MissionApplication>;
-  updateMissionApplicationStatus(applicationId: number, status: string): Promise<MissionApplication | undefined>;
-  getMissionApplications(missionId: number): Promise<MissionApplication[]>;
-  getNurseApplications(nurseId: number): Promise<MissionApplication[]>;
-
-  // ==================== OPÉRATIONS DONNÉES RÉFÉRENCE ====================
-  getAvailableNurses(criteria?: NurseSearchCriteria): Promise<NurseProfile[]>;
-
-  // ==================== OPÉRATIONS STATISTIQUES ====================
-  getNurseStats(nurseId: number): Promise<NurseStats>;
-  getEstablishmentStats(establishmentId: number): Promise<EstablishmentStats>;
-
-  // ==================== OPÉRATIONS PRÉVISIONS IA ====================
-  createAbsenceForecast(forecast: any): Promise<AbsenceForecast>;
-  getAbsenceForecasts(establishmentId: number): Promise<AbsenceForecast[]>;
-
-  // ==================== OPÉRATIONS REQUISES POUR SERVICES IA ====================
-  getAllMissions(): Promise<Mission[]>;
-  getAllUsers(): Promise<User[]>;
-  getAllNurseProfiles(): Promise<NurseProfile[]>;
-  getAllEstablishmentProfiles(): Promise<EstablishmentProfile[]>;
-  getMissionsByEstablishment(establishmentId: number): Promise<Mission[]>;
-  getApplicationsByEstablishment(establishmentId: number): Promise<MissionApplication[]>;
-
-  // ==================== OPÉRATIONS MATCHING ET CANDIDATURES ====================
-  getEstablishmentCandidates(userId: string): Promise<any[]>;
-  acceptCandidate(candidateId: string, userId: string): Promise<any>;
-  rejectCandidate(candidateId: string, userId: string): Promise<any>;
-  updateMission(missionId: string, data: any, userId: string): Promise<any>;
-  deleteMission(missionId: string, userId: string): Promise<boolean>;
-
-  // ==================== OPÉRATIONS TEMPLATES ====================
-  createTemplate(template: InsertMissionTemplate): Promise<MissionTemplate>;
-  getTemplates(establishmentId: number): Promise<MissionTemplate[]>;
-  getTemplate(templateId: number): Promise<MissionTemplate | undefined>;
-  updateTemplate(templateId: number, data: Partial<InsertMissionTemplate>): Promise<MissionTemplate | undefined>;
-  deleteTemplate(templateId: number): Promise<boolean>;
-  publishTemplateAsMission(templateId: number, establishmentId: number, customData?: Partial<InsertMission>): Promise<Mission>;
-
-  // ==================== OPÉRATIONS CONTRATS ====================
-  createContract(contract: any): Promise<any>;
-  getContract(contractId: string): Promise<any | undefined>;
-  updateContract(contractId: string, contract: any): Promise<any>;
-  getContractsByEstablishment(establishmentId: string): Promise<any[]>;
-  getContractsByNurse(nurseId: string): Promise<any[]>;
-  getApplication(applicationId: string): Promise<any | undefined>;
+export interface Mission {
+  id: string
+  title: string
+  description: string
+  establishmentId: string
+  specializations: string[]
+  duration: number
+  hourlyRate: number
+  startDate: Date
+  endDate: Date | null
+  location: string
+  requirements: string | null
+  status: MissionStatus
+  createdAt: Date
+  updatedAt: Date
 }
 
-/**
- * Types pour les filtres et recherches
- */
-export interface MissionFilters {
-  status?: string[];
-  specialization?: string;
-  startDate?: Date;
-  endDate?: Date;
-  urgency?: string;
-  maxDistance?: number;
-  minHourlyRate?: number;
-  maxHourlyRate?: number;
+export interface MissionApplication {
+  id: string
+  missionId: string
+  nurseId: string
+  coverLetter: string | null
+  proposedRate: number | null
+  status: ApplicationStatus
+  createdAt: Date
+  updatedAt: Date
 }
 
-export interface SearchCriteria {
-  keywords?: string;
-  location?: { latitude: number; longitude: number; radius: number };
-  specializations?: string[];
-  experience?: number;
-  availability?: { startDate: Date; endDate: Date };
+export interface EstablishmentProfile {
+  id: string
+  userId: string
+  name: string
+  type: string
+  address: string
+  phone: string
+  specialties: string[]
+  capacity: number | null
+  description: string | null
+  createdAt: Date
+  updatedAt: Date
 }
 
-export interface NurseSearchCriteria {
-  specializations?: string[];
-  minExperience?: number;
-  location?: { latitude: number; longitude: number; radius: number };
-  availability?: boolean;
-  verified?: boolean;
+export interface NurseProfile {
+  id: string
+  userId: string
+  specializations: string[]
+  experience: number
+  certifications: string[]
+  availability: any
+  hourlyRate: number | null
+  rating: number
+  missionsCompleted: number
+  level: number
+  rank: string
+  createdAt: Date
+  updatedAt: Date
 }
 
-export interface NurseStats {
-  totalMissions: number;
-  completedMissions: number;
-  totalEarnings: number;
-  averageRating: number;
-  responseTime: number;
-  successRate: number;
-}
+export class StorageService {
+  // ==============================================================================
+  // Missions
+  // ==============================================================================
 
-export interface EstablishmentStats {
-  totalMissions: number;
-  activeMissions: number;
-  averageResponseTime: number;
-  nurseRetentionRate: number;
-  averageRating: number;
-  totalSpent: number;
-}
-
-/**
- * Implémentation du service de stockage avec PostgreSQL et Drizzle ORM
- */
-export class DatabaseStorage implements IStorage {
-  private db: any;
-
-  constructor() {
-    // Initialisation différée de la base de données
-    this.db = null;
-  }
-
-  private async getDatabase() {
-    if (!this.db) {
-      this.db = await getDb();
-    }
-    return this.db;
-  }
-
-  /**
-   * Log les opérations en mode développement
-   */
-  private log(operation: string, data?: any) {
-    if (isDevelopment) {
-      console.log(`[StorageService] ${operation}`, data ? JSON.stringify(data, null, 2) : '');
-    }
-  }
-
-  /**
-   * Gestion centralisée des erreurs de base de données
-   */
-  private handleError(operation: string, error: unknown): never {
-    console.error(`[StorageService] Erreur ${operation}:`, error);
-
-    if (error instanceof Error) {
-      // Erreurs spécifiques de contraintes PostgreSQL
-      if (error.message.includes('unique constraint')) {
-        throw new Error(`Conflit de données: un enregistrement similaire existe déjà`);
+  async createMission(data: any): Promise<Mission> {
+    return await prisma.mission.create({
+      data: {
+        title: data.title,
+        description: data.description,
+        location: data.location,
+        startDate: new Date(data.startDate),
+        endDate: new Date(data.endDate),
+        hourlyRate: data.hourlyRate,
+        requirements: data.requirements,
+        specializations: data.specializations || [],
+        duration: data.duration || 8,
+        establishmentId: data.establishmentId,
+        status: data.status || "OPEN",
       }
-      if (error.message.includes('foreign key constraint')) {
-        throw new Error(`Référence invalide: l'entité liée n'existe pas`);
+    })
+  }
+
+  async getMission(id: string): Promise<Mission | null> {
+    return await prisma.mission.findUnique({
+      where: { id }
+    })
+  }
+
+  async getMissionsByEstablishment(establishmentId: string): Promise<Mission[]> {
+    return await prisma.mission.findMany({
+      where: { establishmentId }
+    })
+  }
+
+  async getAvailableMissions(): Promise<Mission[]> {
+    return await prisma.mission.findMany({
+      where: { status: "OPEN" }
+    })
+  }
+
+  async updateMissionStatus(id: string, status: MissionStatus): Promise<Mission> {
+    return await prisma.mission.update({
+      where: { id },
+      data: { status }
+    })
+  }
+
+  async searchMissions(query: string, filters: any): Promise<Mission[]> {
+    return await prisma.mission.findMany({
+      where: {
+        OR: [
+          { title: { contains: query, mode: "insensitive" } },
+          { description: { contains: query, mode: "insensitive" } },
+          { location: { contains: query, mode: "insensitive" } }
+        ],
+        ...filters
       }
-      if (error.message.includes('not null constraint')) {
-        throw new Error(`Données manquantes: tous les champs requis doivent être renseignés`);
+    })
+  }
+
+  // ==============================================================================
+  // Candidatures
+  // ==============================================================================
+
+  async createMissionApplication(data: any): Promise<MissionApplication> {
+    return await prisma.missionApplication.create({
+      data: {
+        missionId: data.missionId,
+        nurseId: data.nurseId,
+        coverLetter: data.coverLetter,
+        proposedRate: data.proposedRate,
+        status: data.status || "PENDING",
       }
-    }
-
-    throw new Error(`Erreur lors de l'opération ${operation}: ${error}`);
+    })
   }
 
-  // ==================== IMPLÉMENTATION OPÉRATIONS UTILISATEURS ====================
-
-  async getUser(id: string): Promise<User | undefined> {
-    try {
-      const db = await this.getDatabase();
-      const [user] = await db
-        .select()
-        .from(users)
-        .where(eq(users.id, id));
-      return user || undefined;
-    } catch (error) {
-      this.handleError('getUser', error);
-    }
+  async getMissionApplication(id: string): Promise<MissionApplication | null> {
+    return await prisma.missionApplication.findUnique({
+      where: { id }
+    })
   }
 
-  async getUserByEmail(email: string): Promise<User | undefined> {
-    try {
-      const db = await this.getDatabase();
-      const [user] = await db
-        .select()
-        .from(users)
-        .where(eq(users.email, email));
-      return user || undefined;
-    } catch (error) {
-      this.handleError('getUserByEmail', error);
-    }
-  }
-
-  async createUser(userData: any): Promise<User> {
-    try {
-      const db = await this.getDatabase();
-      const [user] = await db
-        .insert(users)
-        .values(userData)
-        .returning();
-      return user;
-    } catch (error) {
-      this.handleError('createUser', error);
-    }
-  }
-
-  async upsertUser(userData: UpsertUser): Promise<User> {
-    try {
-      const db = await this.getDatabase();
-      const [user] = await db
-        .insert(users)
-        .values(userData)
-        .onConflictDoUpdate({
-          target: users.id,
-          set: {
-            ...userData,
-            updatedAt: new Date(),
-          },
-        })
-        .returning();
-      return user;
-    } catch (error) {
-      this.handleError('upsertUser', error);
-    }
-  }
-
-  async acceptCGU(userId: string, role: string): Promise<User> {
-    try {
-      const db = await this.getDatabase();
-      const [user] = await db
-        .update(users)
-        .set({
-          cguAccepted: true,
-          cguAcceptedAt: new Date(),
-          role,
-          updatedAt: new Date(),
-        })
-        .where(eq(users.id, userId))
-        .returning();
-
-      if (!user) {
-        throw new Error('Utilisateur non trouvé');
-      }
-
-      return user;
-    } catch (error) {
-      this.handleError('acceptCGU', error);
-    }
-  }
-
-  // ==================== IMPLÉMENTATION OPÉRATIONS PROFILS ====================
-
-  async getNurseProfile(userId: string): Promise<NurseProfile | undefined> {
-    try {
-      const db = await this.getDatabase();
-      const [profile] = await db
-        .select()
-        .from(nurseProfiles)
-        .where(eq(nurseProfiles.userId, userId));
-      return profile || undefined;
-    } catch (error) {
-      this.handleError('getNurseProfile', error);
-    }
-  }
-
-  async getEstablishmentProfile(userId: string, establishmentId?: number): Promise<EstablishmentProfile | undefined> {
-    try {
-      this.log('getEstablishmentProfile', { userId });
-      const db = await this.getDatabase();
-
-      if (establishmentId) {
-        const [profile] = await db
-          .select()
-          .from(establishmentProfiles)
-          .where(eq(establishmentProfiles.id, establishmentId));
-        return profile || undefined;
-      }
-      // Sinon, chercher par userId
-      const [profile] = await db
-        .select()
-        .from(establishmentProfiles)
-        .where(eq(establishmentProfiles.userId, userId));
-      return profile || undefined;
-    } catch (error) {
-      this.handleError('getEstablishmentProfile', error);
-    }
-  }
-
-  async getEstablishmentBySiret(siret: string): Promise<EstablishmentProfile | undefined> {
-    try {
-      this.log('getEstablishmentBySiret', { siret });
-      const db = await this.getDatabase();
-      const [profile] = await db
-        .select()
-        .from(establishmentProfiles)
-        .where(eq(establishmentProfiles.siret, siret));
-
-      return profile || undefined;
-    } catch (error) {
-      this.handleError('getEstablishmentBySiret', error);
-    }
-  }
-
-  async createOrUpdateNurseProfile(profileData: InsertNurseProfile): Promise<NurseProfile> {
-    try {
-      // Validation des données avec Zod
-      const validatedData = insertNurseProfileSchema.parse(profileData);
-      this.log('createOrUpdateNurseProfile', { userId: validatedData.userId });
-      const db = await this.getDatabase();
-      const [profile] = await db
-        .insert(nurseProfiles)
-        .values(validatedData)
-        .onConflictDoUpdate({
-          target: nurseProfiles.userId,
-          set: {
-            ...validatedData,
-            updatedAt: new Date(),
-          },
-        })
-        .returning();
-
-      return profile;
-    } catch (error) {
-      this.handleError('createOrUpdateNurseProfile', error);
-    }
-  }
-
-  async createOrUpdateEstablishmentProfile(profileData: InsertEstablishmentProfile): Promise<EstablishmentProfile> {
-    try {
-      // Préparation des données avec gestion des types
-      const preparedData = {
-        ...profileData,
-        // Conversion des arrays en JSON strings si nécessaire
-        specialties: Array.isArray(profileData.specialties)
-          ? JSON.stringify(profileData.specialties)
-          : profileData.specialties,
-        specializations: Array.isArray(profileData.specializations)
-          ? JSON.stringify(profileData.specializations)
-          : profileData.specializations,
-        services: Array.isArray(profileData.services)
-          ? JSON.stringify(profileData.services)
-          : profileData.services,
-        selectedCriteria: Array.isArray(profileData.selectedCriteria)
-          ? JSON.stringify(profileData.selectedCriteria)
-          : profileData.selectedCriteria,
-        customWeights: typeof profileData.customWeights === 'object'
-          ? JSON.stringify(profileData.customWeights)
-          : profileData.customWeights,
-        // Valeurs par défaut pour les champs requis
-        city: profileData.city || 'Non spécifié',
-        postalCode: profileData.postalCode || '00000',
-        type: profileData.type || 'hospital',
-        isActive: profileData.isActive ?? true,
-        isVerified: profileData.isVerified ?? false
-      };
-
-      // Validation des données avec Zod
-      const validatedData = insertEstablishmentProfileSchema.parse(preparedData);
-      this.log('createOrUpdateEstablishmentProfile', { userId: validatedData.userId });
-
-      const db = await this.getDatabase();
-
-      // Vérifier si le profil existe déjà
-      const existingProfile = await db
-        .select()
-        .from(establishmentProfiles)
-        .where(eq(establishmentProfiles.userId, validatedData.userId))
-        .limit(1);
-
-      let profile;
-
-      if (existingProfile.length > 0) {
-        // Mise à jour du profil existant
-        [profile] = await db
-          .update(establishmentProfiles)
-          .set({
-            ...validatedData,
-            updatedAt: new Date(),
-          })
-          .where(eq(establishmentProfiles.userId, validatedData.userId))
-          .returning();
-      } else {
-        // Création d'un nouveau profil
-        [profile] = await db
-          .insert(establishmentProfiles)
-          .values(validatedData)
-          .returning();
-      }
-
-      return profile;
-    } catch (error) {
-      this.handleError('createOrUpdateEstablishmentProfile', error);
-    }
-  }
-
-  // ==================== IMPLÉMENTATION OPÉRATIONS MISSIONS ====================
-
-  async createMission(missionData: InsertMission): Promise<Mission> {
-    try {
-      // Validation des données avec Zod
-      const validatedData = insertMissionSchema.parse(missionData);
-      this.log('createMission', { title: validatedData.title, establishmentId: validatedData.establishmentId });
-      const db = await this.getDatabase();
-      const [mission] = await db
-        .insert(missions)
-        .values(validatedData)
-        .returning();
-
-      // Invalider le cache des missions
-      cacheService.invalidatePattern('missions:');
-
-      return mission;
-    } catch (error) {
-      this.handleError('createMission', error);
-    }
-  }
-
-  async getMission(id: number): Promise<Mission | undefined> {
-    try {
-      this.log('getMission', { id });
-
-      // Cache pour les missions individuelles (TTL: 10 minutes)
-      const cacheKey = `mission:${id}`;
-      return await cacheService.getOrSet(cacheKey, async () => {
-        const db = await this.getDatabase();
-        const [mission] = await db
-          .select()
-          .from(missions)
-          .where(eq(missions.id, id));
-        return mission || undefined;
-      }, 10 * 60 * 1000);
-    } catch (error) {
-      this.handleError('getMission', error);
-    }
-  }
-
-  async getMissionsForNurse(nurseId: number, filters?: MissionFilters): Promise<Mission[]> {
-    try {
-      this.log('getMissionsForNurse', { nurseId, filters });
-      const db = await this.getDatabase();
-      let query = db.select().from(missions);
-
-      // Appliquer les filtres
-      if (filters?.status && filters.status.length > 0) {
-        query = query.where(sql`${missions.status} IN (${filters.status.join(',')})`);
-      }
-
-      const results = await query
-        .orderBy(desc(missions.createdAt));
-
-      return results;
-    } catch (error) {
-      this.handleError('getMissionsForNurse', error);
-    }
-  }
-
-  async getMissionsForEstablishment(establishmentId: number, filters?: MissionFilters): Promise<Mission[]> {
-    try {
-      this.log('getMissionsForEstablishment', { establishmentId, filters });
-
-      // Cache pour les missions d'établissement (TTL: 5 minutes)
-      const cacheKey = `missions:establishment:${establishmentId}:${JSON.stringify(filters || {})}`;
-      return await cacheService.getOrSet(cacheKey, async () => {
-        const db = await this.getDatabase();
-        const results = await db
-          .select()
-          .from(missions)
-          .where(eq(missions.establishmentId, establishmentId))
-          .orderBy(desc(missions.createdAt));
-
-        return results;
-      }, 5 * 60 * 1000);
-    } catch (error) {
-      this.handleError('getMissionsForEstablishment', error);
-    }
-  }
-
-  async updateMissionStatus(missionId: number, status: string): Promise<Mission | undefined> {
-    try {
-      this.log('updateMissionStatus', { missionId, status });
-      const db = await this.getDatabase();
-      const [mission] = await db
-        .update(missions)
-        .set({
-          status,
-          updatedAt: new Date(),
-        })
-        .where(eq(missions.id, missionId))
-        .returning();
-
-      // Invalider le cache des missions
-      cacheService.delete(`mission:${missionId}`);
-      cacheService.invalidatePattern('missions:');
-
-      return mission || undefined;
-    } catch (error) {
-      this.handleError('updateMissionStatus', error);
-    }
-  }
-
-  async searchMissions(criteria: SearchCriteria): Promise<Mission[]> {
-    try {
-      this.log('searchMissions', criteria);
-      const db = await this.getDatabase();
-      const results = await db
-        .select()
-        .from(missions)
-        .where(sql`${missions.status} = 'published'`)
-        .orderBy(desc(missions.createdAt));
-
-      return results;
-    } catch (error) {
-      this.handleError('searchMissions', error);
-    }
-  }
-
-  // ==================== IMPLÉMENTATION OPÉRATIONS CANDIDATURES ====================
-
-  async createMissionApplication(applicationData: InsertMissionApplication): Promise<MissionApplication> {
-    try {
-      // Validation des données avec Zod
-      const validatedData = insertMissionApplicationSchema.parse(applicationData);
-      this.log('createMissionApplication', { missionId: validatedData.missionId, nurseId: validatedData.nurseId });
-      const db = await this.getDatabase();
-      const [application] = await db
-        .insert(missionApplications)
-        .values(validatedData)
-        .returning();
-
-      return application;
-    } catch (error) {
-      this.handleError('createMissionApplication', error);
-    }
-  }
-
-  async updateMissionApplicationStatus(applicationId: number, status: string): Promise<MissionApplication | undefined> {
-    try {
-      this.log('updateMissionApplicationStatus', { applicationId, status });
-      const db = await this.getDatabase();
-      const [application] = await db
-        .update(missionApplications)
-        .set({
-          status,
-          updatedAt: new Date(),
-        })
-        .where(eq(missionApplications.id, applicationId))
-        .returning();
-
-      return application || undefined;
-    } catch (error) {
-      this.handleError('updateMissionApplicationStatus', error);
-    }
-  }
-
-  async getMissionApplications(missionId: number): Promise<MissionApplication[]> {
-    try {
-      this.log('getMissionApplications', { missionId });
-      const db = await this.getDatabase();
-      const results = await db
-        .select()
-        .from(missionApplications)
-        .where(eq(missionApplications.missionId, missionId))
-        .orderBy(desc(missionApplications.createdAt));
-
-      return results;
-    } catch (error) {
-      this.handleError('getMissionApplications', error);
-    }
-  }
-
-  async getNurseApplications(nurseId: number): Promise<MissionApplication[]> {
-    try {
-      this.log('getNurseApplications', { nurseId });
-      const db = await this.getDatabase();
-      const results = await db
-        .select()
-        .from(missionApplications)
-        .where(eq(missionApplications.nurseId, nurseId))
-        .orderBy(desc(missionApplications.createdAt));
-
-      return results;
-    } catch (error) {
-      this.handleError('getNurseApplications', error);
-    }
-  }
-
-  // ==================== IMPLÉMENTATION DONNÉES RÉFÉRENCE ====================
-
-  async getAvailableNurses(criteria?: NurseSearchCriteria): Promise<NurseProfile[]> {
-    try {
-      this.log('getAvailableNurses', criteria);
-      const db = await this.getDatabase();
-      let query = db.select().from(nurseProfiles);
-
-      if (criteria?.specializations && criteria.specializations.length > 0) {
-        query = query.where(sql`${nurseProfiles.specializations} IN (${criteria.specializations.join(',')})`);
-      }
-
-      if (criteria?.minExperience) {
-        query = query.where(gte(nurseProfiles.experience, criteria.minExperience));
-      }
-
-      const results = await query.orderBy(desc(nurseProfiles.rating));
-      return results;
-    } catch (error) {
-      this.handleError('getAvailableNurses', error);
-    }
-  }
-
-  // ==================== IMPLÉMENTATION STATISTIQUES ====================
-
-  async getNurseStats(nurseId: number): Promise<NurseStats> {
-    try {
-      this.log('getNurseStats', { nurseId });
-      const db = await this.getDatabase();
-
-      // Récupérer les missions du nurse
-      const nurseMissions = await db
-        .select()
-        .from(missions)
-        .where(eq(missions.nurseId, nurseId));
-
-      const totalMissions = nurseMissions.length;
-      const completedMissions = nurseMissions.filter(m => m.status === 'completed').length;
-      const totalEarnings = nurseMissions
-        .filter(m => m.status === 'completed')
-        .reduce((sum, m) => sum + (m.hourlyRate * m.duration || 0), 0);
-      const averageRating = nurseMissions.length > 0
-        ? nurseMissions.reduce((sum, m) => sum + (m.rating || 0), 0) / nurseMissions.length
-        : 0;
-
-      return {
-        totalMissions,
-        completedMissions,
-        totalEarnings,
-        averageRating,
-        responseTime: 24, // Valeur par défaut
-        successRate: totalMissions > 0 ? (completedMissions / totalMissions) * 100 : 0
-      };
-    } catch (error) {
-      this.handleError('getNurseStats', error);
-    }
-  }
-
-  private calculateDistance(loc1: any, loc2: any): number {
-    // Formule de Haversine pour calculer la distance entre deux points
-    const toRad = (v: number) => (v * Math.PI) / 180;
-    const R = 6371; // Rayon de la Terre en km
-    const dLat = toRad(loc2.latitude - loc1.latitude);
-    const dLon = toRad(loc2.longitude - loc1.longitude);
-    const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) + Math.cos(toRad(loc1.latitude)) * Math.cos(toRad(loc2.latitude)) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-    return R * c;
-  }
-
-  async getEstablishmentStats(establishmentId: number): Promise<EstablishmentStats> {
-    try {
-      this.log('getEstablishmentStats', { establishmentId });
-      const db = await this.getDatabase();
-
-      // Récupérer les missions de l'établissement
-      const establishmentMissions = await db
-        .select()
-        .from(missions)
-        .where(eq(missions.establishmentId, establishmentId));
-
-      const totalMissions = establishmentMissions.length;
-      const activeMissions = establishmentMissions.filter(m => m.status === 'active').length;
-      const averageRating = establishmentMissions.length > 0
-        ? establishmentMissions.reduce((sum, m) => sum + (m.rating || 0), 0) / establishmentMissions.length
-        : 0;
-      const totalSpent = establishmentMissions
-        .filter(m => m.status === 'completed')
-        .reduce((sum, m) => sum + (m.hourlyRate * m.duration || 0), 0);
-
-      return {
-        totalMissions,
-        activeMissions,
-        averageResponseTime: 48, // Valeur par défaut
-        nurseRetentionRate: 85, // Valeur par défaut
-        averageRating,
-        totalSpent
-      };
-    } catch (error) {
-      this.handleError('getEstablishmentStats', error);
-    }
-  }
-
-  // ==================== IMPLÉMENTATION PRÉVISIONS IA ====================
-
-  async createAbsenceForecast(forecastData: any): Promise<AbsenceForecast> {
-    try {
-      this.log('createAbsenceForecast', forecastData);
-      const db = await this.getDatabase();
-      const [forecast] = await db
-        .insert(absenceForecasts)
-        .values(forecastData)
-        .returning();
-
-      return forecast;
-    } catch (error) {
-      this.handleError('createAbsenceForecast', error);
-    }
-  }
-
-  async getAbsenceForecasts(establishmentId: number): Promise<AbsenceForecast[]> {
-    try {
-      this.log('getAbsenceForecasts', { establishmentId });
-      const db = await this.getDatabase();
-      const results = await db
-        .select()
-        .from(absenceForecasts)
-        .where(eq(absenceForecasts.establishmentId, establishmentId))
-        .orderBy(desc(absenceForecasts.createdAt));
-
-      return results;
-    } catch (error) {
-      this.handleError('getAbsenceForecasts', error);
-    }
-  }
-
-  // ==================== MÉTHODES REQUISES POUR SERVICES IA ====================
-
-  async getAllMissions(): Promise<Mission[]> {
-    try {
-      this.log('getAllMissions');
-
-      // Cache pour toutes les missions (TTL: 3 minutes)
-      const cacheKey = 'missions:all';
-      return await cacheService.getOrSet(cacheKey, async () => {
-        const db = await this.getDatabase();
-        const results = await db
-          .select()
-          .from(missions)
-          .orderBy(desc(missions.createdAt));
-
-        return results;
-      }, 3 * 60 * 1000);
-    } catch (error) {
-      this.handleError('getAllMissions', error);
-    }
-  }
-
-  async getAllUsers(): Promise<User[]> {
-    try {
-      this.log('getAllUsers');
-      const db = await this.getDatabase();
-      const results = await db
-        .select()
-        .from(users)
-        .orderBy(desc(users.createdAt));
-
-      return results;
-    } catch (error) {
-      this.handleError('getAllUsers', error);
-    }
-  }
-
-  async getAllNurseProfiles(): Promise<NurseProfile[]> {
-    try {
-      this.log('getAllNurseProfiles');
-      const db = await this.getDatabase();
-      const results = await db
-        .select()
-        .from(nurseProfiles)
-        .orderBy(desc(nurseProfiles.createdAt));
-
-      return results;
-    } catch (error) {
-      this.handleError('getAllNurseProfiles', error);
-    }
-  }
-
-  async getAllEstablishmentProfiles(): Promise<EstablishmentProfile[]> {
-    try {
-      this.log('getAllEstablishmentProfiles');
-      const db = await this.getDatabase();
-      const results = await db
-        .select()
-        .from(establishmentProfiles)
-        .orderBy(desc(establishmentProfiles.createdAt));
-
-      return results;
-    } catch (error) {
-      this.handleError('getAllEstablishmentProfiles', error);
-    }
-  }
-
-  async getMissionsByEstablishment(establishmentId: number): Promise<Mission[]> {
-    try {
-      this.log('getMissionsByEstablishment', { establishmentId });
-      const db = await this.getDatabase();
-      const results = await db
-        .select()
-        .from(missions)
-        .where(eq(missions.establishmentId, establishmentId))
-        .orderBy(desc(missions.createdAt));
-
-      return results;
-    } catch (error) {
-      this.handleError('getMissionsByEstablishment', error);
-    }
-  }
-
-  async getApplicationsByEstablishment(establishmentId: number): Promise<MissionApplication[]> {
-    try {
-      this.log('getApplicationsByEstablishment', { establishmentId });
-      const db = await this.getDatabase();
-      const results = await db
-        .select()
-        .from(missionApplications)
-        .innerJoin(missions, eq(missionApplications.missionId, missions.id))
-        .where(eq(missions.establishmentId, establishmentId))
-        .orderBy(desc(missionApplications.createdAt));
-
-      return results.map(r => r.missionApplications);
-    } catch (error) {
-      this.handleError('getApplicationsByEstablishment', error);
-    }
-  }
-
-  // ==================== OPÉRATIONS MATCHING ET CANDIDATURES ====================
-
-  async getEstablishmentCandidates(userId: string): Promise<any[]> {
-    try {
-      this.log('getEstablishmentCandidates', { userId });
-      const db = await this.getDatabase();
-
-      // Récupérer le profil de l'établissement
-      const establishmentProfile = await this.getEstablishmentProfile(userId);
-      if (!establishmentProfile) {
-        return [];
-      }
-
-      // Récupérer toutes les candidatures pour les missions de cet établissement
-      const candidates = await db
-        .select({
-          application: missionApplications,
-          mission: missions,
-          nurse: nurseProfiles,
-          user: users
-        })
-        .from(missionApplications)
-        .innerJoin(missions, eq(missionApplications.missionId, missions.id))
-        .innerJoin(nurseProfiles, eq(missionApplications.nurseId, nurseProfiles.id))
-        .innerJoin(users, eq(nurseProfiles.userId, users.id))
-        .where(eq(missions.establishmentId, establishmentProfile.id))
-        .orderBy(desc(missionApplications.createdAt));
-
-      return candidates.map(candidate => ({
-        id: candidate.application.id,
-        missionId: candidate.mission.id,
-        missionTitle: candidate.mission.title,
-        nurseId: candidate.nurse.id,
-        nurseName: `${candidate.user.firstName} ${candidate.user.lastName}`,
-        nurseEmail: candidate.user.email,
-        nurseSpecializations: candidate.nurse.specializations,
-        nurseExperience: candidate.nurse.experience,
-        nurseRating: candidate.nurse.rating,
-        applicationStatus: candidate.application.status,
-        applicationDate: candidate.application.createdAt,
-        hourlyRate: candidate.application.hourlyRate,
-        availability: candidate.application.availability
-      }));
-    } catch (error) {
-      this.handleError('getEstablishmentCandidates', error);
-    }
-  }
-
-  async acceptCandidate(candidateId: string, userId: string): Promise<any> {
-    try {
-      this.log('acceptCandidate', { candidateId, userId });
-      const db = await this.getDatabase();
-
-      // Récupérer la candidature avec les informations de la mission
-      const [application] = await db
-        .select({
-          id: missionApplications.id,
-          missionId: missionApplications.missionId,
-          nurseId: missionApplications.nurseId,
-          status: missionApplications.status,
-          coverLetter: missionApplications.coverLetter,
-          createdAt: missionApplications.createdAt,
-          updatedAt: missionApplications.updatedAt,
-          // Informations de la mission
-          missionTitle: missions.title,
-          missionService: missions.service,
-          missionLocation: missions.location,
-          missionStartDate: missions.startDate,
-          missionEndDate: missions.endDate,
-          missionShift: missions.shift,
-          missionHourlyRate: missions.hourlyRate,
-          // Informations de l'infirmier
-          nurseFirstName: nurseProfiles.firstName,
-          nurseLastName: nurseProfiles.lastName,
-          nurseSpecialization: nurseProfiles.specialization,
-          nurseExperience: nurseProfiles.experience,
-          nurseEmail: users.email,
-        })
-        .from(missionApplications)
-        .innerJoin(missions, eq(missionApplications.missionId, missions.id))
-        .innerJoin(nurseProfiles, eq(missionApplications.nurseId, nurseProfiles.id))
-        .innerJoin(users, eq(nurseProfiles.userId, users.id))
-        .where(eq(missionApplications.id, parseInt(candidateId)));
-
-      if (!application) {
-        throw new Error('Candidature non trouvée');
-      }
-
-      // Vérifier que l'utilisateur est bien l'établissement de cette mission
-      const establishment = await this.getEstablishmentProfile(userId);
-      if (!establishment || establishment.id !== application.missionId) {
-        throw new Error('Accès non autorisé à cette candidature');
-      }
-
-      // Mettre à jour le statut de la candidature à "accepted"
-      const [updatedApplication] = await db
-        .update(missionApplications)
-        .set({
-          status: 'accepted',
-          updatedAt: new Date(),
-        })
-        .where(eq(missionApplications.id, parseInt(candidateId)))
-        .returning();
-
-      // TODO: Ici on pourrait ajouter le candidat à une table "mission_team"
-      // pour gérer l'équipe de la mission de manière plus structurée
-
-      this.log('Candidature acceptée avec succès', {
-        candidateId,
-        nurseName: `${application.nurseFirstName} ${application.nurseLastName}`,
-        missionTitle: application.missionTitle
-      });
-
-      return {
-        ...updatedApplication,
-        nurseInfo: {
-          firstName: application.nurseFirstName,
-          lastName: application.nurseLastName,
-          specialization: application.nurseSpecialization,
-          experience: application.nurseExperience,
-          email: application.nurseEmail,
-        },
-        missionInfo: {
-          title: application.missionTitle,
-          service: application.missionService,
-          location: application.missionLocation,
-          startDate: application.missionStartDate,
-          endDate: application.missionEndDate,
-          shift: application.missionShift,
-          hourlyRate: application.missionHourlyRate,
+  async getMissionApplications(missionId: string): Promise<MissionApplication[]> {
+    return await prisma.missionApplication.findMany({
+      where: { missionId },
+      include: {
+        nurse: {
+          include: {
+            nurseProfile: true
+          }
         }
-      };
-    } catch (error) {
-      this.handleError('acceptCandidate', error);
-    }
-  }
-
-  async rejectCandidate(candidateId: string, userId: string): Promise<any> {
-    try {
-      this.log('rejectCandidate', { candidateId, userId });
-      const db = await this.getDatabase();
-
-      // Récupérer la candidature avec les informations de base
-      const [application] = await db
-        .select({
-          id: missionApplications.id,
-          missionId: missionApplications.missionId,
-          nurseId: missionApplications.nurseId,
-          status: missionApplications.status,
-          // Informations de la mission
-          missionTitle: missions.title,
-          // Informations de l'infirmier
-          nurseFirstName: nurseProfiles.firstName,
-          nurseLastName: nurseProfiles.lastName,
-        })
-        .from(missionApplications)
-        .innerJoin(missions, eq(missionApplications.missionId, missions.id))
-        .innerJoin(nurseProfiles, eq(missionApplications.nurseId, nurseProfiles.id))
-        .where(eq(missionApplications.id, parseInt(candidateId)));
-
-      if (!application) {
-        throw new Error('Candidature non trouvée');
       }
+    })
+  }
 
-      // Vérifier que l'utilisateur est bien l'établissement de cette mission
-      const establishment = await this.getEstablishmentProfile(userId);
-      if (!establishment || establishment.id !== application.missionId) {
-        throw new Error('Accès non autorisé à cette candidature');
+  async updateMissionApplicationStatus(
+    id: string,
+    status: ApplicationStatus,
+    feedback?: string
+  ): Promise<MissionApplication> {
+    return await prisma.missionApplication.update({
+      where: { id },
+      data: { status }
+    })
+  }
+
+  // ==============================================================================
+  // Profils
+  // ==============================================================================
+
+  async getEstablishmentProfile(userId: string): Promise<EstablishmentProfile | null> {
+    return await prisma.establishmentProfile.findUnique({
+      where: { userId }
+    })
+  }
+
+  async createEstablishmentProfile(data: any): Promise<EstablishmentProfile> {
+    return await prisma.establishmentProfile.create({
+      data: {
+        userId: data.userId,
+        name: data.name,
+        type: data.type,
+        address: data.address,
+        phone: data.phone,
+        specialties: data.specializations || [],
+        capacity: data.capacity,
+        description: data.description,
       }
-
-      // Supprimer complètement la candidature (pas juste changer le statut)
-      await db
-        .delete(missionApplications)
-        .where(eq(missionApplications.id, parseInt(candidateId)));
-
-      this.log('Candidature supprimée avec succès', {
-        candidateId,
-        nurseName: `${application.nurseFirstName} ${application.nurseLastName}`,
-        missionTitle: application.missionTitle
-      });
-
-      return {
-        success: true,
-        message: 'Candidature supprimée avec succès',
-        deletedCandidate: {
-          id: application.id,
-          nurseName: `${application.nurseFirstName} ${application.nurseLastName}`,
-          missionTitle: application.missionTitle,
-        }
-      };
-    } catch (error) {
-      this.handleError('rejectCandidate', error);
-    }
+    })
   }
 
-  async updateMission(missionId: string, data: any, userId: string): Promise<any> {
-    try {
-      this.log('updateMission', { missionId, data, userId });
-      const db = await this.getDatabase();
-
-      const [mission] = await db
-        .update(missions)
-        .set({
-          ...data,
-          updatedAt: new Date(),
-        })
-        .where(eq(missions.id, parseInt(missionId)))
-        .returning();
-
-      return mission;
-    } catch (error) {
-      this.handleError('updateMission', error);
-    }
-  }
-
-  async deleteMission(missionId: string, userId: string): Promise<boolean> {
-    try {
-      this.log('deleteMission', { missionId, userId });
-      const db = await this.getDatabase();
-
-      await db
-        .delete(missions)
-        .where(eq(missions.id, parseInt(missionId)));
-
-      return true;
-    } catch (error) {
-      this.handleError('deleteMission', error);
-    }
-  }
-
-  // ==================== OPÉRATIONS TEMPLATES ====================
-
-  async createTemplate(template: InsertMissionTemplate): Promise<MissionTemplate> {
-    try {
-      this.log('createTemplate', { title: template.title });
-      const db = await this.getDatabase();
-      const [newTemplate] = await db
-        .insert(missionTemplates)
-        .values(template)
-        .returning();
-
-      return newTemplate;
-    } catch (error) {
-      this.handleError('createTemplate', error);
-    }
-  }
-
-  async getTemplates(establishmentId: number): Promise<MissionTemplate[]> {
-    try {
-      this.log('getTemplates', { establishmentId });
-      const db = await this.getDatabase();
-      const results = await db
-        .select()
-        .from(missionTemplates)
-        .where(eq(missionTemplates.establishmentId, establishmentId))
-        .orderBy(desc(missionTemplates.createdAt));
-
-      return results;
-    } catch (error) {
-      this.handleError('getTemplates', error);
-    }
-  }
-
-  async getTemplate(templateId: number): Promise<MissionTemplate | undefined> {
-    try {
-      this.log('getTemplate', { templateId });
-      const db = await this.getDatabase();
-      const [template] = await db
-        .select()
-        .from(missionTemplates)
-        .where(eq(missionTemplates.id, templateId));
-
-      return template || undefined;
-    } catch (error) {
-      this.handleError('getTemplate', error);
-    }
-  }
-
-  async updateTemplate(templateId: number, data: Partial<InsertMissionTemplate>): Promise<MissionTemplate | undefined> {
-    try {
-      this.log('updateTemplate', { templateId, data });
-      const db = await this.getDatabase();
-      const [template] = await db
-        .update(missionTemplates)
-        .set({
-          ...data,
-          updatedAt: new Date(),
-        })
-        .where(eq(missionTemplates.id, templateId))
-        .returning();
-
-      return template || undefined;
-    } catch (error) {
-      this.handleError('updateTemplate', error);
-    }
-  }
-
-  async deleteTemplate(templateId: number): Promise<boolean> {
-    try {
-      this.log('deleteTemplate', { templateId });
-      const db = await this.getDatabase();
-
-      await db
-        .delete(missionTemplates)
-        .where(eq(missionTemplates.id, templateId));
-
-      return true;
-    } catch (error) {
-      this.handleError('deleteTemplate', error);
-    }
-  }
-
-  async publishTemplateAsMission(templateId: number, establishmentId: number, customData?: Partial<InsertMission>): Promise<Mission> {
-    try {
-      this.log('publishTemplateAsMission', { templateId, establishmentId });
-      const db = await this.getDatabase();
-
-      // Récupérer le template
-      const template = await this.getTemplate(templateId);
-      if (!template) {
-        throw new Error('Template non trouvé');
+  async updateEstablishmentProfile(userId: string, data: any): Promise<EstablishmentProfile | null> {
+    return await prisma.establishmentProfile.update({
+      where: { userId },
+      data: {
+        name: data.name,
+        type: data.type,
+        address: data.address,
+        phone: data.phone,
+        specialties: data.specializations,
+        capacity: data.capacity,
+        description: data.description,
       }
+    })
+  }
 
-      // Créer la mission à partir du template
-      const missionData: InsertMission = {
-        title: customData?.title || template.title,
-        description: customData?.description || template.description,
-        service: customData?.service || template.service,
-        location: customData?.location || template.location,
-        startDate: customData?.startDate || template.startDate,
-        endDate: customData?.endDate || template.endDate,
-        shift: customData?.shift || template.shift,
-        hourlyRate: customData?.hourlyRate || template.hourlyRate,
+  async getNurseProfile(userId: string): Promise<NurseProfile | null> {
+    return await prisma.nurseProfile.findUnique({
+      where: { userId }
+    })
+  }
+
+  // ==============================================================================
+  // Statistiques
+  // ==============================================================================
+
+  async getEstablishmentStats(establishmentId: string): Promise<any> {
+    const missions = await prisma.mission.count({
+      where: { establishmentId }
+    })
+
+    const activeMissions = await prisma.mission.count({
+      where: {
         establishmentId,
-        status: 'published',
-        urgency: customData?.urgency || template.urgency,
-        requirements: customData?.requirements || template.requirements
-      };
-
-      const [mission] = await db
-        .insert(missions)
-        .values(missionData)
-        .returning();
-
-      return mission;
-    } catch (error) {
-      this.handleError('publishTemplateAsMission', error);
-    }
-  }
-
-  // ==================== OPÉRATIONS CONTRATS ====================
-
-  async createContract(contract: any): Promise<any> {
-    try {
-      this.log('createContract', contract);
-      const db = await this.getDatabase();
-
-      // Générer un numéro de contrat unique
-      const contractNumber = `CTR-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-
-      const contractData = {
-        id: contract.id, // Utiliser l'ID fourni par le code
-        missionId: parseInt(contract.missionId),
-        nurseId: contract.nurseId,
-        establishmentId: contract.establishmentId,
-        contractNumber,
-        title: `Contrat de mission - ${contract.terms?.location || 'Mission'}`,
-        startDate: new Date(contract.terms.startDate),
-        endDate: new Date(contract.terms.endDate),
-        hourlyRate: contract.terms.hourlyRate,
-        totalHours: 0, // À calculer selon la durée
-        totalAmount: 0, // À calculer selon les heures
-        contractContent: JSON.stringify(contract),
-        status: contract.status || 'generated',
-        legalTerms: JSON.stringify(contract.legalClauses),
-        generatedAt: new Date(),
-        createdAt: new Date(),
-        updatedAt: new Date()
-      };
-
-      const [newContract] = await db
-        .insert(contracts)
-        .values(contractData)
-        .returning();
-
-      return newContract;
-    } catch (error) {
-      this.handleError('createContract', error);
-    }
-  }
-
-  async getContract(contractId: string): Promise<any | undefined> {
-    try {
-      this.log('getContract', { contractId });
-      const db = await this.getDatabase();
-      const [contract] = await db
-        .select()
-        .from(contracts)
-        .where(eq(contracts.id, parseInt(contractId)));
-
-      if (!contract) return undefined;
-
-      // Parser le contenu JSON du contrat
-      try {
-        const parsedContent = JSON.parse(contract.contractContent);
-        return {
-          ...contract,
-          ...parsedContent
-        };
-      } catch {
-        return contract;
+        status: "OPEN"
       }
-    } catch (error) {
-      this.handleError('getContract', error);
-    }
-  }
+    })
 
-  async updateContract(contractId: string, contract: any): Promise<any> {
-    try {
-      this.log('updateContract', { contractId, contract });
-      const db = await this.getDatabase();
-
-      const updateData: any = {
-        status: contract.status,
-        contractContent: JSON.stringify(contract),
-        updatedAt: new Date()
-      };
-
-      // Mettre à jour les signatures si présentes
-      if (contract.signatures?.nurse) {
-        updateData.nurseSignature = JSON.stringify(contract.signatures.nurse);
-      }
-      if (contract.signatures?.establishment) {
-        updateData.establishmentSignature = JSON.stringify(contract.signatures.establishment);
-      }
-
-      const [updatedContract] = await db
-        .update(contracts)
-        .set(updateData)
-        .where(eq(contracts.id, parseInt(contractId)))
-        .returning();
-
-      return updatedContract;
-    } catch (error) {
-      this.handleError('updateContract', error);
-    }
-  }
-
-  async getContractsByEstablishment(establishmentId: string): Promise<any[]> {
-    try {
-      this.log('getContractsByEstablishment', { establishmentId });
-      const db = await this.getDatabase();
-      const results = await db
-        .select()
-        .from(contracts)
-        .where(eq(contracts.establishmentId, establishmentId))
-        .orderBy(desc(contracts.createdAt));
-
-      return results.map(contract => {
-        try {
-          const parsedContent = JSON.parse(contract.contractContent);
-          return {
-            ...contract,
-            ...parsedContent
-          };
-        } catch {
-          return contract;
+    const applications = await prisma.missionApplication.count({
+      where: {
+        mission: {
+          establishmentId
         }
-      });
-    } catch (error) {
-      this.handleError('getContractsByEstablishment', error);
+      }
+    })
+
+    const pendingApplications = await prisma.missionApplication.count({
+      where: {
+        mission: {
+          establishmentId
+        },
+        status: "PENDING"
+      }
+    })
+
+    return {
+      totalMissions: missions,
+      activeMissions,
+      totalApplications: applications,
+      pendingApplications,
+      completionRate: missions > 0 ? ((missions - activeMissions) / missions * 100).toFixed(1) : "0"
     }
   }
 
-  async getContractsByNurse(nurseId: string): Promise<any[]> {
-    try {
-      this.log('getContractsByNurse', { nurseId });
-      const db = await this.getDatabase();
-      const results = await db
-        .select()
-        .from(contracts)
-        .where(eq(contracts.nurseId, nurseId))
-        .orderBy(desc(contracts.createdAt));
+  async getEstablishmentMissions(establishmentId: string, options: any): Promise<any> {
+    const { status, page = 1, limit = 10 } = options
+    const skip = (page - 1) * limit
 
-      return results.map(contract => {
-        try {
-          const parsedContent = JSON.parse(contract.contractContent);
-          return {
-            ...contract,
-            ...parsedContent
-          };
-        } catch {
-          return contract;
+    const where: any = { establishmentId }
+    if (status) {
+      where.status = status
+    }
+
+    const [missions, total] = await Promise.all([
+      prisma.mission.findMany({
+        where,
+        skip,
+        take: limit,
+        orderBy: { createdAt: "desc" },
+        include: {
+          applications: {
+            include: {
+              nurse: {
+                include: {
+                  nurseProfile: true
+                }
+              }
+            }
+          }
         }
-      });
-    } catch (error) {
-      this.handleError('getContractsByNurse', error);
+      }),
+      prisma.mission.count({ where })
+    ])
+
+    return {
+      data: missions,
+      total
     }
   }
 
-  async getApplication(applicationId: string): Promise<any | undefined> {
-    try {
-      this.log('getApplication', { applicationId });
-      const db = await this.getDatabase();
-      const [application] = await db
-        .select()
-        .from(missionApplications)
-        .where(eq(missionApplications.id, parseInt(applicationId)));
+  // ==============================================================================
+  // Utilitaires
+  // ==============================================================================
 
-      return application || undefined;
-    } catch (error) {
-      this.handleError('getApplication', error);
-    }
+  async getMissionWithApplications(missionId: string): Promise<any> {
+    return await prisma.mission.findUnique({
+      where: { id: missionId },
+      include: {
+        applications: {
+          include: {
+            nurse: {
+              include: {
+                nurseProfile: true
+              }
+            }
+          }
+        }
+      }
+    })
   }
 }
 
-/**
- * Instance singleton du service de stockage
- * Exportée pour utilisation dans toute l'application
- */
-export const storage = new DatabaseStorage();
+export const storageService = new StorageService()

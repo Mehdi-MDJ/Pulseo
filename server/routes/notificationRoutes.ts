@@ -1,203 +1,174 @@
 /**
  * ==============================================================================
- * NurseLink AI - Routes de Notifications
+ * NurseLink AI - Routes des Notifications
  * ==============================================================================
  *
- * Routes API pour la gestion des notifications dans l'app mobile
- * Permet aux infirmiers de récupérer et gérer leurs notifications
+ * Routes pour la gestion des notifications
+ * Notifications en temps réel et historiques
  * ==============================================================================
  */
 
-import { Router } from 'express';
-import { notificationService } from '../services/notificationService';
-import { localAuthMiddleware } from '../middleware/localAuthMiddleware';
+import { Router, Request, Response } from "express"
+import { requireAuthentication, getUserFromRequest, AuthenticatedRequest } from "../services/authService"
+import { notificationService } from "../services/notificationService"
 
-const router = Router();
+const router = Router()
 
-/**
- * GET /api/notifications
- * Récupère les notifications d'un infirmier connecté
- */
-router.get('/', localAuthMiddleware, async (req, res) => {
+// ==============================================================================
+// Routes des Notifications
+// ==============================================================================
+
+// Récupérer les notifications de l'utilisateur
+router.get("/", requireAuthentication as any, async (req: AuthenticatedRequest, res: Response) => {
   try {
-    const userId = req.user?.id;
-    if (!userId) {
-      return res.status(401).json({ error: "Utilisateur non authentifié" });
+    const userInfo = getUserFromRequest(req)
+    if (!userInfo) {
+      return res.status(401).json({
+        error: "Non authentifié",
+        code: "UNAUTHORIZED"
+      })
     }
 
-    // TODO: Récupérer l'ID infirmier depuis le profil utilisateur
-    const nurseId = parseInt(userId.replace('user-', '')) || 1; // Simulation
+    const { page = 1, limit = 20, unreadOnly = false } = req.query
 
-    const limit = parseInt(req.query.limit as string) || 20;
-    const notifications = await notificationService.getNurseNotifications(nurseId, limit);
+    const notifications = await notificationService.getUserNotifications(userInfo.id, {
+      page: parseInt(page as string),
+      limit: parseInt(limit as string),
+      unreadOnly: unreadOnly === "true"
+    })
 
     res.json({
-      success: true,
-      notifications,
-      total: notifications.length
-    });
-
-  } catch (error) {
-    console.error("[NotificationRoutes] Erreur récupération notifications:", error);
-    res.status(500).json({ error: "Erreur serveur lors de la récupération des notifications" });
-  }
-});
-
-/**
- * GET /api/notifications/stats
- * Récupère les statistiques de notifications d'un infirmier
- */
-router.get('/stats', localAuthMiddleware, async (req, res) => {
-  try {
-    const userId = req.user?.id;
-    if (!userId) {
-      return res.status(401).json({ error: "Utilisateur non authentifié" });
-    }
-
-    const nurseId = parseInt(userId.replace('user-', '')) || 1; // Simulation
-    const stats = await notificationService.getNotificationStats(nurseId);
-
-    res.json({
-      success: true,
-      stats
-    });
-
-  } catch (error) {
-    console.error("[NotificationRoutes] Erreur récupération stats:", error);
-    res.status(500).json({ error: "Erreur serveur lors de la récupération des statistiques" });
-  }
-});
-
-/**
- * PUT /api/notifications/:id/read
- * Marque une notification comme lue
- */
-router.put('/:id/read', localAuthMiddleware, async (req, res) => {
-  try {
-    const userId = req.user?.id;
-    const notificationId = parseInt(req.params.id);
-
-    if (!userId) {
-      return res.status(401).json({ error: "Utilisateur non authentifié" });
-    }
-
-    if (isNaN(notificationId)) {
-      return res.status(400).json({ error: "ID de notification invalide" });
-    }
-
-    const nurseId = parseInt(userId.replace('user-', '')) || 1; // Simulation
-    const success = await notificationService.markAsRead(notificationId, nurseId);
-
-    if (!success) {
-      return res.status(404).json({ error: "Notification non trouvée" });
-    }
-
-    res.json({
-      success: true,
-      message: "Notification marquée comme lue"
-    });
-
-  } catch (error) {
-    console.error("[NotificationRoutes] Erreur marquage notification:", error);
-    res.status(500).json({ error: "Erreur serveur lors du marquage de la notification" });
-  }
-});
-
-/**
- * PUT /api/notifications/read-all
- * Marque toutes les notifications d'un infirmier comme lues
- */
-router.put('/read-all', localAuthMiddleware, async (req, res) => {
-  try {
-    const userId = req.user?.id;
-    if (!userId) {
-      return res.status(401).json({ error: "Utilisateur non authentifié" });
-    }
-
-    const nurseId = parseInt(userId.replace('user-', '')) || 1; // Simulation
-    await notificationService.markAllAsRead(nurseId);
-
-    res.json({
-      success: true,
-      message: "Toutes les notifications marquées comme lues"
-    });
-
-  } catch (error) {
-    console.error("[NotificationRoutes] Erreur marquage notifications:", error);
-    res.status(500).json({ error: "Erreur serveur lors du marquage des notifications" });
-  }
-});
-
-/**
- * DELETE /api/notifications/:id
- * Supprime une notification
- */
-router.delete('/:id', localAuthMiddleware, async (req, res) => {
-  try {
-    const userId = req.user?.id;
-    const notificationId = parseInt(req.params.id);
-
-    if (!userId) {
-      return res.status(401).json({ error: "Utilisateur non authentifié" });
-    }
-
-    if (isNaN(notificationId)) {
-      return res.status(400).json({ error: "ID de notification invalide" });
-    }
-
-    // TODO: Implémenter la suppression de notification
-    console.log(`🗑️ Suppression notification ${notificationId} pour utilisateur ${userId}`);
-
-    res.json({
-      success: true,
-      message: "Notification supprimée"
-    });
-
-  } catch (error) {
-    console.error("[NotificationRoutes] Erreur suppression notification:", error);
-    res.status(500).json({ error: "Erreur serveur lors de la suppression de la notification" });
-  }
-});
-
-/**
- * POST /api/notifications/test
- * Route de test pour créer une notification de démonstration
- */
-router.post('/test', localAuthMiddleware, async (req, res) => {
-  try {
-    const userId = req.user?.id;
-    if (!userId) {
-      return res.status(401).json({ error: "Utilisateur non authentifié" });
-    }
-
-    const nurseId = parseInt(userId.replace('user-', '')) || 1; // Simulation
-
-    // Créer une notification de test
-    const testNotification = await notificationService.createNotification({
-      nurseId,
-      missionId: 1,
-      type: 'new_mission_match',
-      title: 'Mission de test disponible',
-      message: 'Une nouvelle mission correspondant à votre profil est disponible !',
-      score: 85,
-      distance: 12.5,
-      urgency: 'high',
-      metadata: {
-        test: true,
-        timestamp: new Date().toISOString()
+      notifications: notifications.data,
+      pagination: {
+        page: parseInt(page as string),
+        limit: parseInt(limit as string),
+        total: notifications.total,
+        unread: notifications.unreadCount
       }
-    });
+    })
+  } catch (error) {
+    console.error("Erreur récupération notifications:", error)
+    res.status(500).json({
+      error: "Erreur serveur",
+      code: "INTERNAL_ERROR"
+    })
+  }
+})
+
+// Marquer une notification comme lue
+router.patch("/:id/read", requireAuthentication as any, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const userInfo = getUserFromRequest(req)
+    if (!userInfo) {
+      return res.status(401).json({
+        error: "Non authentifié",
+        code: "UNAUTHORIZED"
+      })
+    }
+
+    const notificationId = req.params.id
+    const notification = await notificationService.markAsRead(notificationId, userInfo.id)
+
+    if (!notification) {
+      return res.status(404).json({
+        error: "Notification non trouvée",
+        code: "NOTIFICATION_NOT_FOUND"
+      })
+    }
 
     res.json({
-      success: true,
-      message: "Notification de test créée",
-      notification: testNotification
-    });
-
+      message: "Notification marquée comme lue",
+      notification
+    })
   } catch (error) {
-    console.error("[NotificationRoutes] Erreur création notification test:", error);
-    res.status(500).json({ error: "Erreur serveur lors de la création de la notification de test" });
+    console.error("Erreur marquage notification:", error)
+    res.status(500).json({
+      error: "Erreur serveur",
+      code: "INTERNAL_ERROR"
+    })
   }
-});
+})
 
-export default router;
+// Marquer toutes les notifications comme lues
+router.patch("/read-all", requireAuthentication as any, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const userInfo = getUserFromRequest(req)
+    if (!userInfo) {
+      return res.status(401).json({
+        error: "Non authentifié",
+        code: "UNAUTHORIZED"
+      })
+    }
+
+    const count = await notificationService.markAllAsRead(userInfo.id)
+
+    res.json({
+      message: `${count} notifications marquées comme lues`,
+      count
+    })
+  } catch (error) {
+    console.error("Erreur marquage notifications:", error)
+    res.status(500).json({
+      error: "Erreur serveur",
+      code: "INTERNAL_ERROR"
+    })
+  }
+})
+
+// Supprimer une notification
+router.delete("/:id", requireAuthentication as any, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const userInfo = getUserFromRequest(req)
+    if (!userInfo) {
+      return res.status(401).json({
+        error: "Non authentifié",
+        code: "UNAUTHORIZED"
+      })
+    }
+
+    const notificationId = req.params.id
+    const deleted = await notificationService.deleteNotification(notificationId, userInfo.id)
+
+    if (!deleted) {
+      return res.status(404).json({
+        error: "Notification non trouvée",
+        code: "NOTIFICATION_NOT_FOUND"
+      })
+    }
+
+    res.json({
+      message: "Notification supprimée"
+    })
+  } catch (error) {
+    console.error("Erreur suppression notification:", error)
+    res.status(500).json({
+      error: "Erreur serveur",
+      code: "INTERNAL_ERROR"
+    })
+  }
+})
+
+// Statistiques des notifications
+router.get("/stats", requireAuthentication as any, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const userInfo = getUserFromRequest(req)
+    if (!userInfo) {
+      return res.status(401).json({
+        error: "Non authentifié",
+        code: "UNAUTHORIZED"
+      })
+    }
+
+    const stats = await notificationService.getNotificationStats(userInfo.id)
+
+    res.json(stats)
+  } catch (error) {
+    console.error("Erreur récupération statistiques notifications:", error)
+    res.status(500).json({
+      error: "Erreur serveur",
+      code: "INTERNAL_ERROR"
+    })
+  }
+})
+
+export default router

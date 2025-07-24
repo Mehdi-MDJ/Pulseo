@@ -1,986 +1,222 @@
 /**
  * ==============================================================================
- * NurseLink AI - Routes Établissement
+ * NurseLink AI - Routes des Établissements
  * ==============================================================================
  *
- * Routes spécifiques aux établissements de santé :
- * - Statistiques dashboard
- * - Gestion des missions
- * - Gestion des candidatures
- * - Templates de missions
+ * Routes pour la gestion des établissements
+ * Profils, missions, statistiques
  * ==============================================================================
  */
 
-import { Router } from "express";
-import { localAuthMiddleware } from "../middleware/localAuthMiddleware";
-import { storage } from "../services/storageService";
-import { MatchingService } from "../services/matchingService";
+import { Router, Request, Response } from "express"
+import { z } from "zod"
+import { requireAuthentication, getUserFromRequest, AuthenticatedRequest } from "../services/authService"
+import { storageService } from "../services/storageService"
 
-const router = Router();
-const matchingService = new MatchingService();
+const router = Router()
 
-// Middleware d'authentification du serveur principal
-function requireAuth(req: any, res: any, next: any) {
-  let sessionToken = null;
+// Schémas de validation
+const establishmentProfileSchema = z.object({
+  name: z.string().min(1),
+  type: z.string().min(1),
+  address: z.string().min(1),
+  phone: z.string().min(1),
+  specialties: z.array(z.string()).optional(),
+  capacity: z.number().positive(),
+  description: z.string().optional(),
+})
 
-  if (req.headers.authorization && req.headers.authorization.startsWith('Bearer ')) {
-    sessionToken = req.headers.authorization.substring(7);
-  } else {
-    const cookies = req.headers.cookie;
-    if (cookies) {
-      const sessionTokenMatch = cookies.match(/sessionToken=([^;]+)/);
-      sessionToken = sessionTokenMatch ? sessionTokenMatch[1] : null;
-    }
-  }
+// ==============================================================================
+// Routes des Profils Établissements
+// ==============================================================================
 
-  if (sessionToken) {
-    // Utiliser les sessions du serveur principal
-    const sessions = (global as any).sessions || new Map();
-    const user = sessions.get(sessionToken);
-    if (user) {
-      req.user = user;
-      return next();
-    }
-  }
-
-  res.status(401).json({ error: 'Non authentifié' });
-}
-
-/**
- * GET /api/establishment/stats
- * Récupère les statistiques du dashboard établissement
- */
-router.get("/stats", localAuthMiddleware, async (req, res) => {
+// Créer un profil établissement
+router.post("/profile", requireAuthentication as any, async (req: AuthenticatedRequest, res: Response) => {
   try {
-    const userId = (req.user as any)?.id;
-    if (!userId) {
-      return res.status(401).json({ error: "Utilisateur non authentifié" });
+    const userInfo = getUserFromRequest(req)
+    if (!userInfo) {
+      return res.status(401).json({
+        error: "Non authentifié",
+        code: "UNAUTHORIZED"
+      })
     }
 
-    // Récupérer le profil établissement pour avoir l'ID
-    const establishmentProfile = await storage.getEstablishmentProfile(userId);
-    if (!establishmentProfile) {
-      return res.status(404).json({ error: "Profil établissement non trouvé" });
+    // Vérifier que l'utilisateur est un établissement
+    if (userInfo.role !== "ESTABLISHMENT") {
+      return res.status(403).json({
+        error: "Accès refusé - Seuls les établissements peuvent créer un profil",
+        code: "FORBIDDEN"
+      })
     }
 
-    // Récupérer les vraies statistiques
-    const stats = await storage.getEstablishmentStats(establishmentProfile.id);
-
-    // Enrichir avec des données calculées
-    const missions = await storage.getMissionsByEstablishment(establishmentProfile.id);
-    const applications = await storage.getApplicationsByEstablishment(establishmentProfile.id);
-
-    const enrichedStats = {
-      ...stats,
-      activePersonnel: missions.filter(m => m.status === 'in_progress').length,
-      personnelGrowth: 12, // À calculer avec les données historiques
-      openMissions: missions.filter(m => m.status === 'published').length,
-      urgentMissions: missions.filter(m => m.urgency === 'high').length,
-      averageResponseTime: stats.averageResponseTime || 'N/A',
-      responseTimeImprovement: -15, // À calculer
-      satisfaction: stats.averageRating || 0,
-      totalReviews: 156, // À récupérer depuis les évaluations
-      pendingApplications: applications.filter(a => a.status === 'pending').length
-    };
-
-    res.json(enrichedStats);
-  } catch (error) {
-    console.error("[EstablishmentRoutes] Erreur récupération stats:", error);
-    res.status(500).json({ error: "Erreur serveur lors de la récupération des statistiques" });
-  }
-});
-
-/**
- * GET /api/establishment/missions
- * Récupère toutes les missions de l'établissement
- */
-router.get("/missions", localAuthMiddleware, async (req, res) => {
-  try {
-    const userId = req.user?.id;
-    if (!userId) {
-      return res.status(401).json({ error: "Utilisateur non authentifié" });
-    }
-
-    // Utiliser directement l'userId comme establishmentId pour le développement
-    // Retourner un tableau vide si aucune mission n'est trouvée
-    let missions = [];
-    try {
-      missions = await storage.getMissionsByEstablishment(1); // ID fixe pour le dev
-    } catch (dbError) {
-      console.log('[DEBUG] Aucune mission trouvée, retour d\'un tableau vide');
-      missions = [];
-    }
-
-    res.json(missions);
-  } catch (error) {
-    console.error("[EstablishmentRoutes] Erreur récupération missions:", error);
-    res.status(500).json({ error: "Erreur serveur lors de la récupération des missions" });
-  }
-});
-
-/**
- * GET /api/establishment/applications
- * Récupère toutes les candidatures pour les missions de l'établissement
- */
-router.get("/applications", localAuthMiddleware, async (req, res) => {
-  try {
-    const userId = req.user?.id;
-    if (!userId) {
-      return res.status(401).json({ error: "Utilisateur non authentifié" });
-    }
-
-    // Récupérer le profil établissement pour avoir l'ID
-    const establishmentProfile = await storage.getEstablishmentProfile(userId);
-    if (!establishmentProfile) {
-      return res.status(404).json({ error: "Profil établissement non trouvé" });
-    }
-
-    const applications = await storage.getApplicationsByEstablishment(establishmentProfile.id);
-    res.json(applications);
-  } catch (error) {
-    console.error("[EstablishmentRoutes] Erreur récupération candidatures:", error);
-    res.status(500).json({ error: "Erreur serveur lors de la récupération des candidatures" });
-  }
-});
-
-/**
- * GET /api/establishment/analytics
- * Récupère les données analytiques de l'établissement
- */
-router.get("/analytics", localAuthMiddleware, async (req, res) => {
-  try {
-    const userId = req.user?.id;
-    if (!userId) {
-      return res.status(401).json({ error: "Utilisateur non authentifié" });
-    }
-
-    // Récupérer le profil établissement pour avoir l'ID
-    const establishmentProfile = await storage.getEstablishmentProfile(userId);
-    if (!establishmentProfile) {
-      return res.status(404).json({ error: "Profil établissement non trouvé" });
-    }
-
-    // Récupérer les statistiques
-    const stats = await storage.getEstablishmentStats(establishmentProfile.id);
-
-    const analytics = {
-      satisfaction: stats.averageRating || 0,
-      totalReviews: 156, // À récupérer depuis les évaluations
-      performanceMetrics: {
-        quality: {
-          establishmentSatisfaction: stats.averageRating || 0,
-          nurseRetentionRate: stats.nurseRetentionRate || 0
-        },
-        efficiency: {
-          averageResponseTime: stats.averageResponseTime || 0,
-          missionCompletionRate: 94 // À calculer
-        }
-      }
-    };
-
-    res.json(analytics);
-  } catch (error) {
-    console.error("[EstablishmentRoutes] Erreur récupération analytics:", error);
-    res.status(500).json({ error: "Erreur serveur lors de la récupération des analytics" });
-  }
-});
-
-/**
- * GET /api/establishment/profile
- * Récupère le profil de l'établissement connecté
- */
-router.get("/profile", localAuthMiddleware, async (req, res) => {
-  try {
-    const userId = req.user?.id;
-    if (!userId) {
-      return res.status(401).json({ error: "Utilisateur non authentifié" });
-    }
-
-    const profile = await storage.getEstablishmentProfile(userId);
-    if (!profile) {
-      return res.status(404).json({ error: "Profil établissement non trouvé" });
-    }
-
-    res.json(profile);
-  } catch (error) {
-    console.error("[EstablishmentRoutes] Erreur récupération profil:", error);
-    res.status(500).json({ error: "Erreur serveur lors de la récupération du profil" });
-  }
-});
-
-/**
- * POST /api/establishment/profile
- * Crée ou met à jour le profil de l'établissement connecté
- */
-router.post("/profile", localAuthMiddleware, async (req, res) => {
-  try {
-    const userId = req.user?.id;
-    if (!userId) {
-      return res.status(401).json({ error: "Utilisateur non authentifié" });
-    }
-
-    console.log("🔧 Création/mise à jour du profil établissement pour:", req.user?.email);
-    console.log("Données reçues:", req.body);
-
-    // ✅ NOUVEAU : S'assurer que l'utilisateur existe dans la base de données
-    try {
-      await storage.getUser(userId);
-    } catch (error) {
-      // L'utilisateur n'existe pas dans la base, le créer
-      console.log("👤 Création de l'utilisateur dans la base de données:", userId);
-      await storage.createUser({
-        id: userId,
-        email: req.user?.email || 'unknown@example.com',
-        firstName: req.user?.firstName || 'Établissement',
-        lastName: req.user?.lastName || 'Test',
-        role: 'establishment',
-        cguAccepted: true,
-        createdAt: new Date()
-      });
+    // Validation des données
+    const validationResult = establishmentProfileSchema.safeParse(req.body)
+    if (!validationResult.success) {
+      return res.status(400).json({
+        error: "Données invalides",
+        code: "VALIDATION_ERROR",
+        details: validationResult.error.issues,
+      })
     }
 
     const profileData = {
-      ...req.body,
-      userId: userId
-    };
-
-    const profile = await storage.createOrUpdateEstablishmentProfile(profileData);
-
-    console.log("✅ Profil créé/mis à jour avec succès:", profile.id);
-    res.json(profile);
-  } catch (error: any) {
-    console.error("[EstablishmentRoutes] Erreur création/mise à jour profil:", error);
-
-    // Gestion d'erreurs spécifiques
-    if (error?.issues) {
-      // Erreur de validation Zod
-      const validationErrors = error.issues.map((issue: any) => ({
-        field: issue.path.join('.'),
-        message: issue.message,
-        expected: issue.expected,
-        received: issue.received
-      }));
-
-      return res.status(400).json({
-        error: "Données invalides",
-        details: validationErrors,
-        help: "Vérifiez que tous les champs requis sont fournis avec les bons types"
-      });
+      ...validationResult.data,
+      userId: userInfo.id,
     }
 
+    const profile = await storageService.createEstablishmentProfile(profileData)
+
+    res.status(201).json({
+      message: "Profil établissement créé avec succès",
+      profile
+    })
+  } catch (error) {
+    console.error("Erreur création profil établissement:", error)
     res.status(500).json({
-      error: "Erreur serveur lors de la création/mise à jour du profil",
-      message: error?.message || "Erreur inconnue"
-    });
+      error: "Erreur serveur",
+      code: "INTERNAL_ERROR"
+    })
   }
-});
+})
 
-/**
- * POST /api/establishment/missions
- * Crée une nouvelle mission
- */
-router.post("/missions", localAuthMiddleware, async (req, res) => {
-  console.log("🎯 ROUTE POST /missions appelée !");
-  console.log("Body reçu:", req.body);
-
+// Récupérer le profil établissement
+router.get("/profile", requireAuthentication as any, async (req: AuthenticatedRequest, res: Response) => {
   try {
-    const userId = req.user?.id;
-    console.log("User ID:", userId);
-
-    if (!userId) {
+    const userInfo = getUserFromRequest(req)
+    if (!userInfo) {
       return res.status(401).json({
-        error: "Utilisateur non authentifié",
+        error: "Non authentifié",
         code: "UNAUTHORIZED"
-      });
+      })
     }
 
-    // ✅ CORRIGÉ : Récupérer le profil établissement avec gestion d'erreur
-    console.log("Récupération du profil établissement...");
-    let establishmentProfile;
+    const profile = await storageService.getEstablishmentProfile(userInfo.id)
 
-    try {
-      establishmentProfile = await storage.getEstablishmentProfile(userId);
-      console.log("Profil trouvé:", establishmentProfile?.id);
-    } catch (error) {
-      console.log("⚠️ Erreur récupération profil:", error?.message);
-      // Essayer de créer le profil automatiquement
-      try {
-        console.log("🔧 Création automatique du profil...");
-        establishmentProfile = await storage.createOrUpdateEstablishmentProfile({
-          userId,
-          name: "Établissement",
-          type: "hospital",
-          address: "À compléter",
-          city: "À compléter",
-          postalCode: "00000",
-          isActive: true,
-          isVerified: false
-        });
-        console.log("✅ Profil créé automatiquement:", establishmentProfile.id);
-      } catch (createError) {
-        console.error("❌ Impossible de créer le profil:", createError?.message);
-        return res.status(500).json({
-          error: "Impossible de récupérer ou créer le profil établissement",
-          details: createError?.message
-        });
-      }
-    }
-
-    if (!establishmentProfile) {
+    if (!profile) {
       return res.status(404).json({
         error: "Profil établissement non trouvé",
-        help: "Veuillez d'abord créer votre profil établissement"
-      });
+        code: "PROFILE_NOT_FOUND"
+      })
     }
 
-    // Validation des données reçues
-    const { title, description, service, location, startDate, endDate, shift, hourlyRate } = req.body;
-    console.log("Données extraites:", { title, description, service, location, startDate, endDate, shift, hourlyRate });
+    res.json(profile)
+  } catch (error) {
+    console.error("Erreur récupération profil établissement:", error)
+    res.status(500).json({
+      error: "Erreur serveur",
+      code: "INTERNAL_ERROR"
+    })
+  }
+})
 
-    if (!title || !description || !service || !location || !startDate || !endDate || !shift || !hourlyRate) {
-      return res.status(400).json({
-        error: "Données manquantes",
-        code: "MISSING_DATA",
-        details: {
-          required: ["title", "description", "service", "location", "startDate", "endDate", "shift", "hourlyRate"],
-          received: Object.keys(req.body)
-        }
-      });
+// Mettre à jour le profil établissement
+router.put("/profile", requireAuthentication as any, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const userInfo = getUserFromRequest(req)
+    if (!userInfo) {
+      return res.status(401).json({
+        error: "Non authentifié",
+        code: "UNAUTHORIZED"
+      })
     }
 
-    // Validation des dates
-    const start = new Date(startDate);
-    const end = new Date(endDate);
-    if (end <= start) {
+    // Validation des données
+    const validationResult = establishmentProfileSchema.partial().safeParse(req.body)
+    if (!validationResult.success) {
       return res.status(400).json({
-        error: "La date de fin doit être postérieure à la date de début",
-        code: "INVALID_DATES"
-      });
-    }
-
-    // Validation du taux horaire
-    if (hourlyRate < 15 || hourlyRate > 200) {
-      return res.status(400).json({
-        error: "Le taux horaire doit être compris entre 15€ et 200€",
-        code: "INVALID_RATE"
-      });
-    }
-
-    // Préparer les données de mission
-    const missionData = {
-      title,
-      description,
-      specialization: service, // Mapper service vers specialization
-      location,
-      startDate: start,
-      endDate: end,
-      shift,
-      hourlyRate: Number(hourlyRate),
-      establishmentId: establishmentProfile.id, // Utiliser l'ID numérique du profil
-      status: "active",
-      createdAt: new Date(),
-      updatedAt: new Date()
-    };
-
-    console.log("Données de mission préparées:", missionData);
-
-    // Créer la mission
-    console.log("Création de la mission...");
-    const newMission = await storage.createMission(missionData);
-    console.log("Mission créée:", newMission);
-
-    // ✅ SIMPLIFIÉ : Réponse de succès sans matching automatique pour l'instant
-    const responseData = {
-      success: true,
-      message: "Mission créée avec succès",
-      mission: newMission,
-      establishmentProfile: {
-        id: establishmentProfile.id,
-        name: establishmentProfile.name
-      }
-    };
-
-    res.status(201).json(responseData);
-
-  } catch (error: any) {
-    // Log détaillé pour debug - FORCER L'AFFICHAGE
-    console.log("🔥🔥🔥 ERREUR CRÉATION MISSION 🔥🔥🔥");
-    console.log("Type d'erreur:", typeof error);
-    console.log("Message:", error?.message);
-    console.log("Stack:", error?.stack);
-    console.log("Code:", error?.code);
-    console.log("Détails:", error?.details);
-    console.log("🔥🔥🔥 FIN ERREUR 🔥🔥🔥");
-
-    console.error("[EstablishmentRoutes] Erreur création mission (détail):", error && (error.stack || error.message || error));
-
-    // Gestion d'erreurs spécifiques
-    if (error.code === 'VALIDATION_ERROR') {
-      return res.status(400).json({
-        error: "Données de mission invalides",
+        error: "Données invalides",
         code: "VALIDATION_ERROR",
-        details: error.details
-      });
+        details: validationResult.error.issues,
+      })
     }
 
-    if (error.code === 'DUPLICATE_MISSION') {
-      return res.status(409).json({
-        error: "Une mission similaire existe déjà",
-        code: "DUPLICATE_MISSION"
-      });
+    const profile = await storageService.updateEstablishmentProfile(userInfo.id, validationResult.data)
+
+    if (!profile) {
+      return res.status(404).json({
+        error: "Profil établissement non trouvé",
+        code: "PROFILE_NOT_FOUND"
+      })
     }
 
+    res.json({
+      message: "Profil établissement mis à jour",
+      profile
+    })
+  } catch (error) {
+    console.error("Erreur mise à jour profil établissement:", error)
     res.status(500).json({
-      error: "Erreur serveur lors de la création de la mission",
-      code: "INTERNAL_ERROR",
-      message: error?.message || "Erreur inconnue"
-    });
+      error: "Erreur serveur",
+      code: "INTERNAL_ERROR"
+    })
   }
-});
+})
 
-/**
- * PUT /api/establishment/missions/:id
- * Met à jour une mission existante
- */
-router.put("/missions/:id", localAuthMiddleware, async (req, res) => {
+// ==============================================================================
+// Routes des Statistiques
+// ==============================================================================
+
+// Statistiques de l'établissement
+router.get("/stats", requireAuthentication as any, async (req: AuthenticatedRequest, res: Response) => {
   try {
-    const userId = req.user?.id;
-    const missionId = req.params.id;
-
-    if (!userId) {
-      return res.status(401).json({ error: "Utilisateur non authentifié" });
+    const userInfo = getUserFromRequest(req)
+    if (!userInfo) {
+      return res.status(401).json({
+        error: "Non authentifié",
+        code: "UNAUTHORIZED"
+      })
     }
 
-    const mission = await storage.updateMission(missionId, req.body, userId);
-    if (!mission) {
-      return res.status(404).json({ error: "Mission non trouvée" });
-    }
+    const stats = await storageService.getEstablishmentStats(userInfo.id)
 
-    res.json(mission);
+    res.json(stats)
   } catch (error) {
-    console.error("[EstablishmentRoutes] Erreur mise à jour mission:", error);
-    res.status(500).json({ error: "Erreur serveur lors de la mise à jour de la mission" });
+    console.error("Erreur récupération statistiques:", error)
+    res.status(500).json({
+      error: "Erreur serveur",
+      code: "INTERNAL_ERROR"
+    })
   }
-});
+})
 
-/**
- * DELETE /api/establishment/missions/:id
- * Supprime une mission
- */
-router.delete("/missions/:id", localAuthMiddleware, async (req, res) => {
+// ==============================================================================
+// Routes des Missions
+// ==============================================================================
+
+// Missions de l'établissement
+router.get("/missions", requireAuthentication as any, async (req: AuthenticatedRequest, res: Response) => {
   try {
-    const userId = req.user?.id;
-    const missionId = req.params.id;
-
-    if (!userId) {
-      return res.status(401).json({ error: "Utilisateur non authentifié" });
+    const userInfo = getUserFromRequest(req)
+    if (!userInfo) {
+      return res.status(401).json({
+        error: "Non authentifié",
+        code: "UNAUTHORIZED"
+      })
     }
 
-    const deleted = await storage.deleteMission(missionId, userId);
-    if (!deleted) {
-      return res.status(404).json({ error: "Mission non trouvée" });
-    }
-
-    res.json({ message: "Mission supprimée avec succès" });
-  } catch (error) {
-    console.error("[EstablishmentRoutes] Erreur suppression mission:", error);
-    res.status(500).json({ error: "Erreur serveur lors de la suppression de la mission" });
-  }
-});
-
-/**
- * GET /api/establishment/candidates
- * Récupère toutes les candidatures pour les missions de l'établissement
- */
-router.get("/candidates", localAuthMiddleware, async (req, res) => {
-  try {
-    const userId = req.user?.id;
-    if (!userId) {
-      return res.status(401).json({ error: "Utilisateur non authentifié" });
-    }
-
-    const candidates = await storage.getEstablishmentCandidates(userId);
-    res.json(candidates);
-  } catch (error) {
-    console.error("[EstablishmentRoutes] Erreur récupération candidatures:", error);
-    res.status(500).json({ error: "Erreur serveur lors de la récupération des candidatures" });
-  }
-});
-
-/**
- * PUT /api/establishment/candidates/:id/accept
- * Accepte une candidature
- */
-router.put("/candidates/:id/accept", localAuthMiddleware, async (req, res) => {
-  try {
-    const userId = req.user?.id;
-    const candidateId = req.params.id;
-
-    if (!userId) {
-      return res.status(401).json({ error: "Utilisateur non authentifié" });
-    }
-
-    const result = await storage.acceptCandidate(candidateId, userId);
-    if (!result) {
-      return res.status(404).json({ error: "Candidature non trouvée" });
-    }
-
-    res.json({ message: "Candidature acceptée avec succès", candidate: result });
-  } catch (error) {
-    console.error("[EstablishmentRoutes] Erreur acceptation candidature:", error);
-    res.status(500).json({ error: "Erreur serveur lors de l'acceptation de la candidature" });
-  }
-});
-
-/**
- * PUT /api/establishment/candidates/:id/reject
- * Rejette une candidature
- */
-router.put("/candidates/:id/reject", localAuthMiddleware, async (req, res) => {
-  try {
-    const userId = req.user?.id;
-    const candidateId = req.params.id;
-
-    if (!userId) {
-      return res.status(401).json({ error: "Utilisateur non authentifié" });
-    }
-
-    const result = await storage.rejectCandidate(candidateId, userId);
-    if (!result) {
-      return res.status(404).json({ error: "Candidature non trouvée" });
-    }
+    const { status, page = 1, limit = 10 } = req.query
+    const missions = await storageService.getEstablishmentMissions(userInfo.id, {
+      status: status as string,
+      page: parseInt(page as string),
+      limit: parseInt(limit as string)
+    })
 
     res.json({
-      message: "Candidature rejetée avec succès",
-      canUndo: true // Permettre l'annulation pendant 30 secondes
-    });
-  } catch (error) {
-    console.error("[EstablishmentRoutes] Erreur rejet candidature:", error);
-    res.status(500).json({ error: "Erreur serveur lors du rejet de la candidature" });
-  }
-});
-
-/**
- * PUT /api/establishment/candidates/:id/undo_reject
- * Annule le rejet d'une candidature
- */
-router.put("/candidates/:id/undo_reject", localAuthMiddleware, async (req, res) => {
-  try {
-    const userId = req.user?.id;
-    const candidateId = req.params.id;
-
-    if (!userId) {
-      return res.status(401).json({ error: "Utilisateur non authentifié" });
-    }
-
-    // Remettre la candidature en statut "pending"
-    const result = await storage.updateMissionApplicationStatus(parseInt(candidateId), 'pending');
-    if (!result) {
-      return res.status(404).json({ error: "Candidature non trouvée" });
-    }
-
-    res.json({
-      message: "Rejet annulé avec succès",
-      candidate: result
-    });
-  } catch (error) {
-    console.error("[EstablishmentRoutes] Erreur annulation rejet:", error);
-    res.status(500).json({ error: "Erreur serveur lors de l'annulation du rejet" });
-  }
-});
-
-/**
- * GET /api/establishment/templates
- * Récupère tous les templates de l'établissement
- */
-router.get("/templates", localAuthMiddleware, async (req, res) => {
-  try {
-    const userId = req.user?.id;
-    if (!userId) {
-      return res.status(401).json({ error: "Utilisateur non authentifié" });
-    }
-
-    // Récupérer le profil établissement pour avoir l'ID
-    const establishmentProfile = await storage.getEstablishmentProfile(userId);
-    if (!establishmentProfile) {
-      return res.status(404).json({ error: "Profil établissement non trouvé" });
-    }
-
-    const templates = await storage.getTemplates(establishmentProfile.id);
-    res.json(templates);
-  } catch (error) {
-    console.error("[EstablishmentRoutes] Erreur récupération templates:", error);
-    res.status(500).json({ error: "Erreur serveur lors de la récupération des templates" });
-  }
-});
-
-/**
- * GET /api/establishment/templates/:id
- * Récupère un template spécifique
- */
-router.get("/templates/:id", localAuthMiddleware, async (req, res) => {
-  try {
-    const userId = req.user?.id;
-    const templateId = parseInt(req.params.id);
-
-    if (!userId) {
-      return res.status(401).json({ error: "Utilisateur non authentifié" });
-    }
-
-    const template = await storage.getTemplate(templateId);
-    if (!template) {
-      return res.status(404).json({ error: "Template non trouvé" });
-    }
-
-    res.json(template);
-  } catch (error) {
-    console.error("[EstablishmentRoutes] Erreur récupération template:", error);
-    res.status(500).json({ error: "Erreur serveur lors de la récupération du template" });
-  }
-});
-
-/**
- * POST /api/establishment/templates
- * Crée un nouveau template
- */
-router.post("/templates", localAuthMiddleware, async (req, res) => {
-  try {
-    const userId = req.user?.id;
-    if (!userId) {
-      return res.status(401).json({ error: "Utilisateur non authentifié" });
-    }
-
-    // Récupérer le profil établissement pour avoir l'ID
-    const establishmentProfile = await storage.getEstablishmentProfile(userId);
-    if (!establishmentProfile) {
-      return res.status(404).json({ error: "Profil établissement non trouvé" });
-    }
-
-    const templateData = {
-      ...req.body,
-      establishmentId: userId
-    };
-
-    const template = await storage.createTemplate(templateData);
-    res.status(201).json(template);
-  } catch (error) {
-    console.error("[EstablishmentRoutes] Erreur création template:", error);
-    res.status(500).json({ error: "Erreur serveur lors de la création du template" });
-  }
-});
-
-/**
- * PUT /api/establishment/templates/:id
- * Met à jour un template
- */
-router.put("/templates/:id", localAuthMiddleware, async (req, res) => {
-  try {
-    const userId = req.user?.id;
-    const templateId = parseInt(req.params.id);
-
-    if (!userId) {
-      return res.status(401).json({ error: "Utilisateur non authentifié" });
-    }
-
-    const template = await storage.updateTemplate(templateId, req.body);
-    if (!template) {
-      return res.status(404).json({ error: "Template non trouvé" });
-    }
-
-    res.json(template);
-  } catch (error) {
-    console.error("[EstablishmentRoutes] Erreur mise à jour template:", error);
-    res.status(500).json({ error: "Erreur serveur lors de la mise à jour du template" });
-  }
-});
-
-/**
- * POST /api/establishment/templates/:id/publish
- * Publie un template comme mission
- */
-router.post("/templates/:id/publish", localAuthMiddleware, async (req, res) => {
-  try {
-    const userId = req.user?.id;
-    const templateId = parseInt(req.params.id);
-
-    if (!userId) {
-      return res.status(401).json({ error: "Utilisateur non authentifié" });
-    }
-
-    // Récupérer le profil établissement pour avoir l'ID
-    const establishmentProfile = await storage.getEstablishmentProfile(userId);
-    if (!establishmentProfile) {
-      return res.status(404).json({ error: "Profil établissement non trouvé" });
-    }
-
-    const mission = await storage.publishTemplateAsMission(templateId, establishmentProfile.id, req.body);
-    res.status(201).json(mission);
-  } catch (error) {
-    console.error("[EstablishmentRoutes] Erreur publication template:", error);
-    res.status(500).json({ error: "Erreur serveur lors de la publication du template" });
-  }
-});
-
-/**
- * DELETE /api/establishment/templates/:id
- * Supprime un template
- */
-router.delete("/templates/:id", localAuthMiddleware, async (req, res) => {
-  try {
-    const userId = req.user?.id;
-    const templateId = parseInt(req.params.id);
-
-    if (!userId) {
-      return res.status(401).json({ error: "Utilisateur non authentifié" });
-    }
-
-    const deleted = await storage.deleteTemplate(templateId);
-    if (!deleted) {
-      return res.status(404).json({ error: "Template non trouvé" });
-    }
-
-    res.json({ message: "Template supprimé avec succès" });
-  } catch (error) {
-    console.error("[EstablishmentRoutes] Erreur suppression template:", error);
-    res.status(500).json({ error: "Erreur serveur lors de la suppression du template" });
-  }
-});
-
-/**
- * POST /api/establishment/applications/:applicationId/accept
- * Accepte une candidature et génère automatiquement un contrat
- */
-router.post("/applications/:applicationId/accept", localAuthMiddleware, async (req, res) => {
-  try {
-    const userId = req.user?.id;
-    const applicationId = req.params.applicationId;
-    const { message } = req.body;
-
-    if (!userId) {
-      return res.status(401).json({ error: "Utilisateur non authentifié" });
-    }
-
-    console.log(`🎯 Acceptation de candidature ${applicationId} par l'établissement ${userId}`);
-
-    // Récupérer le profil établissement
-    const establishmentProfile = await storage.getEstablishmentProfile(userId);
-    if (!establishmentProfile) {
-      return res.status(404).json({ error: "Profil établissement non trouvé" });
-    }
-
-    // Accepter la candidature
-    const acceptedApplication = await storage.acceptCandidate(applicationId, userId);
-    if (!acceptedApplication) {
-      return res.status(404).json({ error: "Candidature non trouvée" });
-    }
-
-    // Générer automatiquement le contrat
-    const contractService = (await import('../services/contractService')).contractService;
-    const contract = await contractService.generateContractFromApplication(applicationId);
-
-    console.log(`✅ Candidature acceptée et contrat généré: ${contract.id}`);
-
-    res.status(200).json({
-      success: true,
-      message: "Candidature acceptée et contrat généré avec succès",
-      application: acceptedApplication,
-      contract: {
-        id: contract.id,
-        status: contract.status,
-        expiresAt: contract.expiresAt
+      missions: missions.data,
+      pagination: {
+        page: parseInt(page as string),
+        limit: parseInt(limit as string),
+        total: missions.total,
+        pages: Math.ceil(missions.total / parseInt(limit as string))
       }
-    });
-
+    })
   } catch (error) {
-    console.error("[EstablishmentRoutes] Erreur acceptation candidature:", error);
+    console.error("Erreur récupération missions:", error)
     res.status(500).json({
-      error: "Erreur serveur lors de l'acceptation de la candidature",
-      details: error instanceof Error ? error.message : "Erreur inconnue"
-    });
+      error: "Erreur serveur",
+      code: "INTERNAL_ERROR"
+    })
   }
-});
+})
 
-/**
- * POST /api/establishment/applications/:applicationId/reject
- * Rejette une candidature
- */
-router.post("/applications/:applicationId/reject", localAuthMiddleware, async (req, res) => {
-  try {
-    const userId = req.user?.id;
-    const applicationId = req.params.applicationId;
-    const { reason } = req.body;
-
-    if (!userId) {
-      return res.status(401).json({ error: "Utilisateur non authentifié" });
-    }
-
-    console.log(`❌ Rejet de candidature ${applicationId} par l'établissement ${userId}`);
-
-    // Rejeter la candidature
-    const rejectedApplication = await storage.rejectCandidate(applicationId, userId);
-    if (!rejectedApplication) {
-      return res.status(404).json({ error: "Candidature non trouvée" });
-    }
-
-    res.status(200).json({
-      success: true,
-      message: "Candidature rejetée avec succès",
-      application: rejectedApplication
-    });
-
-  } catch (error) {
-    console.error("[EstablishmentRoutes] Erreur rejet candidature:", error);
-    res.status(500).json({
-      error: "Erreur serveur lors du rejet de la candidature",
-      details: error instanceof Error ? error.message : "Erreur inconnue"
-    });
-  }
-});
-
-// Gestionnaire 404 pour les routes d'établissement inexistantes
-router.use("*", (req, res) => {
-  res.status(404).json({
-    error: "Route d'établissement non trouvée",
-    message: `La route ${req.method} ${req.originalUrl} n'existe pas`,
-    code: "ESTABLISHMENT_ROUTE_NOT_FOUND"
-  });
-});
-
-export default router;
-
-/**
- * Récupère les infirmiers disponibles pour le matching
- * Simulation avec des données de test pour l'instant
- */
-async function getAvailableNursesForMatching() {
-  // TODO: Remplacer par une vraie requête à la base de données
-  return [
-    {
-      id: 1,
-      firstName: "Sophie",
-      lastName: "Martin",
-      specializations: ["urgences", "cardiologie"],
-      experience: 5,
-      rating: 4.8,
-      completedMissions: 45,
-      certifications: ["BLS", "ACLS"],
-      languages: ["français", "anglais"],
-      technicalSkills: ["perfusion", "ventilation"],
-      preferredShifts: ["jour", "nuit"],
-      maxDistance: 30,
-      mobility: 'vehicle' as const,
-      nightShiftExperience: true,
-      urgencyExperience: true,
-      covidExperience: true,
-      pediatricExperience: false,
-      geriatricExperience: true,
-      latitude: 45.764043,
-      longitude: 4.835659,
-      establishmentHistory: { 1: 3 },
-      stressResistance: 4,
-      teamwork: 5,
-      flexibility: 4,
-      isActive: true,
-      lastMissionDate: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000),
-      preferredPatientTypes: ["adult", "geriatric"],
-      preferredEnvironments: ["hospital", "clinic"]
-    },
-    {
-      id: 2,
-      firstName: "Pierre",
-      lastName: "Dubois",
-      specializations: ["urgences", "pediatrie"],
-      experience: 3,
-      rating: 4.6,
-      completedMissions: 28,
-      certifications: ["BLS", "PALS"],
-      languages: ["français"],
-      technicalSkills: ["perfusion"],
-      preferredShifts: ["jour"],
-      maxDistance: 25,
-      mobility: 'public' as const,
-      nightShiftExperience: false,
-      urgencyExperience: true,
-      covidExperience: false,
-      pediatricExperience: true,
-      geriatricExperience: false,
-      latitude: 45.780000,
-      longitude: 4.820000,
-      establishmentHistory: { 1: 1 },
-      stressResistance: 3,
-      teamwork: 4,
-      flexibility: 3,
-      isActive: true,
-      lastMissionDate: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000),
-      preferredPatientTypes: ["pediatric"],
-      preferredEnvironments: ["hospital"]
-    },
-    {
-      id: 3,
-      firstName: "Marie",
-      lastName: "Leroy",
-      specializations: ["reanimation"],
-      experience: 8,
-      rating: 4.9,
-      completedMissions: 72,
-      certifications: ["BLS", "ACLS", "AFGSU"],
-      languages: ["français", "anglais"],
-      technicalSkills: ["perfusion", "ventilation"],
-      preferredShifts: ["jour"],
-      maxDistance: 35,
-      mobility: 'vehicle' as const,
-      nightShiftExperience: false,
-      urgencyExperience: true,
-      covidExperience: true,
-      pediatricExperience: false,
-      geriatricExperience: false,
-      latitude: 45.780000,
-      longitude: 4.820000,
-      establishmentHistory: { 1: 1 },
-      stressResistance: 5,
-      teamwork: 5,
-      flexibility: 3,
-      isActive: true,
-      lastMissionDate: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000),
-      preferredPatientTypes: ["adult"],
-      preferredEnvironments: ["hospital"]
-    }
-  ];
-}
-
-/**
- * Envoie les notifications aux candidats sélectionnés
- */
-async function sendNotificationsToCandidates(matches: any[], mission: any) {
-  try {
-    console.log(`📱 Envoi de notifications à ${matches.length} candidats pour la mission ${mission.id}`);
-
-    // Pour chaque candidat qualifié, créer une notification
-    for (const match of matches) {
-      const notification = {
-        nurseId: match.nurseId,
-        missionId: mission.id,
-        type: 'new_mission_match',
-        title: 'Nouvelle mission correspondant à votre profil',
-        message: `Mission "${mission.title}" - Score de compatibilité : ${match.totalScore}%`,
-        score: match.totalScore,
-        distance: Math.round(match.distance * 10) / 10,
-        urgency: match.totalScore > 80 ? 'high' : match.totalScore > 60 ? 'medium' : 'low',
-        createdAt: new Date(),
-        read: false
-      };
-
-      // TODO: Sauvegarder la notification en base de données
-      console.log(`📨 Notification créée pour infirmier ${match.nurseId}:`, notification);
-
-      // TODO: Envoyer notification push vers l'app mobile
-      // await sendPushNotification(notification);
-    }
-
-    console.log(`✅ ${matches.length} notifications envoyées avec succès`);
-
-  } catch (error) {
-    console.error("❌ Erreur lors de l'envoi des notifications:", error);
-    // Ne pas faire échouer la création de mission si les notifications échouent
-  }
-}
+export default router

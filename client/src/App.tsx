@@ -5,38 +5,22 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { ThemeProvider } from "@/components/theme-provider";
 import { useAuth } from "@/hooks/useAuth";
+import { Suspense } from "react";
+import { Skeleton } from "@/components/ui/skeleton";
+
+// Pages principales
 import LandingSimple from "@/pages/landing-simple";
 import AuthPage from "@/pages/auth-page";
 import Home from "@/pages/home";
 import Dashboard from "@/pages/dashboard";
-import DashboardFixed from "@/pages/dashboard-fixed";
-import MobileApp from "@/pages/mobile-app";
-import MobileDemo from "@/pages/mobile-demo";
 import NotFound from "@/pages/not-found";
-import ProfileSelector from "@/pages/profile-selector";
-import ProfileCreator from "@/pages/profile-creator";
-import EstablishmentSignup from "@/pages/establishment-signup";
+
+// Pages métier
 import EstablishmentDashboard from "@/pages/establishment-dashboard";
-import EstablishmentDashboardDemo from "@/pages/establishment-dashboard-demo";
 import MissionCreator from "@/pages/mission-creator";
-import MissionCreatorSimple from "@/pages/mission-creator-simple";
-import MissionTemplates from "@/pages/mission-templates";
 import ContractsPage from "@/pages/contracts";
-import ContractDemo from "@/pages/contract-demo";
-import ContractTest from "@/pages/contract-test";
-import AIAssistant from "@/pages/ai-assistant";
-import AnalyticsDashboard from "@/pages/analytics-dashboard";
-import AIAssistantDemo from "@/pages/ai-assistant-demo";
-import AnalyticsDemo from "@/pages/analytics-demo";
-import MatchingDemo from "@/pages/matching-demo";
-import AutoMatchingDemo from "@/pages/auto-matching-demo";
-import NurseNotifications from "@/pages/nurse-notifications";
 import SettingsPage from "@/pages/settings";
-import WorkflowExplanation from "@/pages/workflow-explanation";
-import ScoringConfiguration from "@/pages/scoring-configuration";
-import DoseCalculator from "@/pages/dose-calculator";
-import { Suspense } from "react";
-import { Skeleton } from "@/components/ui/skeleton";
+import EstablishmentSignup from "@/pages/establishment-signup";
 
 function LoadingSkeleton() {
   return (
@@ -66,43 +50,25 @@ function Router() {
 
   return (
     <Switch>
+      {/* Routes publiques */}
       <Route path="/landing-simple" component={LandingSimple} />
       <Route path="/auth-page" component={AuthPage} />
       <Route path="/auth" component={AuthPage} />
-      <Route path="/" component={isAuthenticated ? Home : LandingSimple} />
-      <Route path="/mobile-app" component={MobileApp} />
-      <Route path="/mobile-demo" component={MobileDemo} />
       <Route path="/establishment-signup" component={EstablishmentSignup} />
-      <Route path="/profile-selector" component={ProfileSelector} />
-      <Route path="/profile-creator" component={ProfileCreator} />
-      <Route path="/contract-demo" component={ContractDemo} />
-      <Route path="/contract-test" component={ContractTest} />
-      <Route path="/assistant-demo" component={AIAssistantDemo} />
-      <Route path="/ai-assistant-demo" component={AIAssistantDemo} />
-      <Route path="/analytics-demo" component={AnalyticsDemo} />
-      <Route path="/matching-demo" component={MatchingDemo} />
-      <Route path="/auto-matching-demo" component={AutoMatchingDemo} />
-      <Route path="/nurse-notifications" component={NurseNotifications} />
-      <Route path="/workflow-explanation" component={WorkflowExplanation} />
-      <Route path="/scoring-configuration" component={ScoringConfiguration} />
-      <Route path="/dose-calculator" component={DoseCalculator} />
-      <Route path="/assistant" component={AIAssistant} />
-      <Route path="/analytics" component={AnalyticsDashboard} />
-      <Route path="/establishment-dashboard-demo" component={EstablishmentDashboardDemo} />
-      <Route path="/establishment-dashboard" component={EstablishmentDashboard} />
-      <Route path="/mission-creator" component={MissionCreator} />
-      <Route path="/mission-templates" component={MissionTemplates} />
-      <Route path="/dashboard" component={Dashboard} />
-      <Route path="/test-animation" component={DashboardFixed} />
+      <Route path="/" component={isAuthenticated ? Home : LandingSimple} />
+
+      {/* Routes protégées */}
       {isAuthenticated && (
         <>
-          <Route path="/settings" component={SettingsPage} />
+          <Route path="/dashboard" component={Dashboard} />
+          <Route path="/establishment-dashboard" component={EstablishmentDashboard} />
+          <Route path="/mission-creator" component={MissionCreator} />
           <Route path="/contracts" component={ContractsPage} />
-          <Route path="/assistant" component={AIAssistant} />
-          <Route path="/analytics" component={AnalyticsDashboard} />
-          <Route path="/mobile" component={MobileApp} />
+          <Route path="/settings" component={SettingsPage} />
         </>
       )}
+
+      {/* Route 404 */}
       <Route component={NotFound} />
     </Switch>
   );

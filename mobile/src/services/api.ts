@@ -5,8 +5,8 @@ import { authService } from './authService';
 
 // Configuration API - URL du backend
 const API_BASE_URL = process.env.NODE_ENV === 'production'
-  ? 'https://workspace--5000.replit.dev/api'
-  : 'http://localhost:3000/api';
+  ? 'https://nurselink.ai/api'
+  : 'http://localhost:5000/api';
 
 // Instance Axios configurée
 export const apiClient = axios.create({
@@ -273,7 +273,9 @@ export interface Chat {
 }
 
 class ApiService {
-  private baseURL = 'http://localhost:3000/api'; // Remplacez par votre URL d'API
+  private baseURL = process.env.NODE_ENV === 'production'
+    ? 'https://nurselink.ai/api'
+    : 'http://localhost:5000/api';
   private timeout = 10000; // 10 secondes
 
   // Méthode générique pour les requêtes HTTP

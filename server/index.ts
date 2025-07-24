@@ -15,9 +15,6 @@ import rateLimit from "express-rate-limit";
 import compression from "compression";
 import { json, urlencoded } from "body-parser";
 
-// Configuration NextAuth.js v5
-import { handlers } from "./lib/auth";
-
 // Routes
 import authRoutes from "./routes/authRoutes";
 import missionRoutes from "./routes/missionRoutes";

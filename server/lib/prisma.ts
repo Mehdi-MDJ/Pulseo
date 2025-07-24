@@ -4,7 +4,6 @@
  * ==============================================================================
  *
  * Client Prisma configuré pour la connexion à la base de données
- * Optimisé pour les performances et la gestion des connexions
  * ==============================================================================
  */
 

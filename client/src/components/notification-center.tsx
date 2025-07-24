@@ -1,20 +1,20 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { 
-  Popover, 
-  PopoverContent, 
-  PopoverTrigger 
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger
 } from "@/components/ui/popover";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
-import { 
-  Bell, 
-  Check, 
-  X, 
-  Clock, 
-  User, 
+import {
+  Bell,
+  Check,
+  X,
+  Clock,
+  User,
   FileText,
   MapPin,
   Euro
@@ -70,6 +70,10 @@ export function NotificationCenter() {
         return <FileText className="w-4 h-4 text-orange-500" />;
       case "payment":
         return <Euro className="w-4 h-4 text-green-500" />;
+      case "contract_signed_nurse":
+        return <Check className="w-4 h-4 text-green-700" />;
+      case "contract_signed_establishment":
+        return <Check className="w-4 h-4 text-blue-700" />;
       default:
         return <Bell className="w-4 h-4 text-gray-500" />;
     }
@@ -87,6 +91,10 @@ export function NotificationCenter() {
         return "border-orange-200 bg-orange-50 dark:bg-orange-900/20";
       case "payment":
         return "border-green-200 bg-green-50 dark:bg-green-900/20";
+      case "contract_signed_nurse":
+        return "border-green-200 bg-green-50 dark:bg-green-900/20";
+      case "contract_signed_establishment":
+        return "border-blue-200 bg-blue-50 dark:bg-blue-900/20";
       default:
         return "border-gray-200 bg-gray-50 dark:bg-gray-900/20";
     }
@@ -98,8 +106,8 @@ export function NotificationCenter() {
         <Button variant="ghost" size="icon" className="relative">
           <Bell className="w-4 h-4" />
           {unreadCount > 0 && (
-            <Badge 
-              variant="destructive" 
+            <Badge
+              variant="destructive"
               className="absolute -top-1 -right-1 w-5 h-5 flex items-center justify-center text-xs p-0"
             >
               {unreadCount > 9 ? "9+" : unreadCount}
@@ -107,7 +115,7 @@ export function NotificationCenter() {
           )}
         </Button>
       </PopoverTrigger>
-      
+
       <PopoverContent className="w-80 p-0" align="end">
         <div className="p-4">
           <div className="flex items-center justify-between mb-4">
@@ -136,10 +144,10 @@ export function NotificationCenter() {
           ) : notifications?.length > 0 ? (
             <div className="space-y-3 max-h-96 overflow-y-auto">
               {notifications.map((notification: any) => (
-                <Card 
-                  key={notification.id} 
+                <Card
+                  key={notification.id}
                   className={`cursor-pointer transition-colors ${
-                    !notification.read 
+                    !notification.read
                       ? getNotificationColor(notification.type)
                       : "border-gray-100 hover:bg-gray-50 dark:hover:bg-gray-800"
                   }`}
@@ -150,7 +158,7 @@ export function NotificationCenter() {
                       <div className="mt-1">
                         {getNotificationIcon(notification.type)}
                       </div>
-                      
+
                       <div className="flex-1 min-w-0">
                         <p className="font-medium text-sm mb-1">
                           {notification.title}
@@ -158,15 +166,15 @@ export function NotificationCenter() {
                         <p className="text-xs text-muted-foreground mb-2 line-clamp-2">
                           {notification.message}
                         </p>
-                        
+
                         <div className="flex items-center justify-between">
                           <span className="text-xs text-muted-foreground">
-                            {formatDistanceToNow(new Date(notification.createdAt), { 
-                              addSuffix: true, 
-                              locale: fr 
+                            {formatDistanceToNow(new Date(notification.createdAt), {
+                              addSuffix: true,
+                              locale: fr
                             })}
                           </span>
-                          
+
                           {!notification.read && (
                             <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
                           )}

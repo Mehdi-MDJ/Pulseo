@@ -172,6 +172,12 @@ export default function ContractsPage() {
                         <Button variant="ghost" size="sm">
                           <Download className="w-4 h-4" />
                         </Button>
+                        {/* Lien vers la signature électronique si le contrat n'est pas signé */}
+                        {['pending', 'draft', 'signed_nurse'].includes(contract.status) && (
+                          <Button variant="outline" size="sm" asChild>
+                            <a href={`/contract-signature/${contract.id}`}>Signer</a>
+                          </Button>
+                        )}
                       </div>
                     </TableCell>
                   </TableRow>

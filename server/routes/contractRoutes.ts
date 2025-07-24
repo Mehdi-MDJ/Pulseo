@@ -9,7 +9,8 @@
 
 import express from 'express';
 import { contractService } from '../services/contractService';
-import { requireAuth, requireRole, AuthenticatedRequest } from '../middleware/authMiddleware';
+import { requireAuth, requireRole } from '../middleware/authMiddleware';
+import { Request, Response } from 'express';
 import { logger } from '../services/loggerService';
 import { z } from 'zod';
 import { storage } from '../services/storageService';
@@ -174,7 +175,7 @@ router.get('/test-list', async (req, res) => {
  * POST /api/contracts/generate
  * Génère automatiquement un contrat lors de l'acceptation d'une candidature
  */
-router.post('/generate', requireAuth, async (req: AuthenticatedRequest, res) => {
+router.post('/generate', requireAuth, async (req: Request, res: Response) => {
   try {
     logger.info('Génération de contrat demandée', {
       userId: req.user?.id,
@@ -218,55 +219,43 @@ router.post('/generate', requireAuth, async (req: AuthenticatedRequest, res) => 
 
 /**
  * POST /api/contracts/:contractId/sign
- * Signature électronique du contrat par le candidat
+ * Signature électronique du contrat par l'infirmier
  */
 router.post('/:contractId/sign', requireAuth, async (req, res) => {
   try {
     const { contractId } = req.params;
-    const signatureData = SignatureSchema.parse(req.body);
-
-    logger.info('Signature de contrat demandée', {
-      contractId,
-      userId: req.user?.id,
-      signatureData
-    });
-
-    // Ajouter les informations de signature
-    const fullSignatureData = {
-      ip: signatureData.ip || req.ip,
-      userAgent: signatureData.userAgent || req.get('User-Agent') || '',
-      consent: signatureData.consent
-    };
-
-    // Traiter la signature
-    const contract = await contractService.signContractByNurse(contractId, fullSignatureData);
-
-    res.json({
-      success: true,
-      message: 'Contrat signé avec succès',
-      contract: {
-        id: contract.id,
-        status: contract.status,
-        signatures: contract.signatures
-      }
-    });
-
-  } catch (error) {
-    logger.error('Erreur signature contrat', { error, userId: req.user?.id });
-
-    if (error instanceof z.ZodError) {
-      return res.status(400).json({
-        success: false,
-        message: 'Données de signature invalides',
-        errors: error.errors
-      });
+    const { consent } = req.body;
+    const userAgent = req.get('User-Agent') || '';
+    const ip = req.ip;
+    if (typeof consent !== 'boolean') {
+      return res.status(400).json({ success: false, message: 'Consentement requis' });
     }
+    // Appeler le service de signature
+    const contract = await contractService.signContractByNurse(contractId, { ip, userAgent, consent });
+    res.json({ success: true, message: 'Contrat signé avec succès', contract });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error instanceof Error ? error.message : 'Erreur inconnue' });
+  }
+});
 
-    res.status(500).json({
-      success: false,
-      message: 'Erreur lors de la signature du contrat',
-      error: error instanceof Error ? error.message : 'Erreur inconnue'
-    });
+/**
+ * POST /api/contracts/:contractId/sign-establishment
+ * Signature électronique du contrat par l'établissement
+ */
+router.post('/:contractId/sign-establishment', requireAuth, async (req, res) => {
+  try {
+    const { contractId } = req.params;
+    const { consent } = req.body;
+    const userAgent = req.get('User-Agent') || '';
+    const ip = req.ip;
+    if (typeof consent !== 'boolean') {
+      return res.status(400).json({ success: false, message: 'Consentement requis' });
+    }
+    // Appeler le service de signature établissement
+    const contract = await contractService.signContractByEstablishment(contractId, { ip, userAgent, consent });
+    res.json({ success: true, message: 'Contrat signé par l’établissement', contract });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error instanceof Error ? error.message : 'Erreur inconnue' });
   }
 });
 

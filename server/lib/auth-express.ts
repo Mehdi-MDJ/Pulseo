@@ -1,10 +1,10 @@
 /**
  * ==============================================================================
- * NurseLink AI - Configuration NextAuth.js v4
+ * NurseLink AI - Authentification Express avec NextAuth.js v4
  * ==============================================================================
  *
- * Configuration complète de l'authentification avec NextAuth.js v4
- * Support multi-providers : Google, GitHub, Email/Password, Magic Links
+ * Configuration d'authentification compatible Express
+ * Utilise NextAuth.js v4 avec des routes Express personnalisées
  * ==============================================================================
  */
 
@@ -43,7 +43,7 @@ declare module "next-auth/jwt" {
   }
 }
 
-export default NextAuth({
+const authOptions = {
   adapter: PrismaAdapter(prisma),
 
   providers: [
@@ -193,4 +193,6 @@ export default NextAuth({
   },
 
   debug: process.env.NODE_ENV === "development",
-})
+}
+
+export default NextAuth(authOptions)

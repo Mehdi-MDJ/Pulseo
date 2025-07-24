@@ -3,279 +3,249 @@
  * NurseLink AI - Service de Notifications
  * ==============================================================================
  *
- * Service pour la gestion des notifications push vers l'app mobile
- * Gère les notifications de matching, candidatures, et mises à jour
+ * Service pour la gestion des notifications
+ * Notifications en temps réel et historiques
  * ==============================================================================
  */
 
-import { getDb } from '../db';
-import { notifications, nurseProfiles, missions } from '../../shared/schema';
-import { eq, and, desc } from 'drizzle-orm';
+import { prisma } from "../lib/prisma"
 
-export interface NotificationData {
-  nurseId: number;
-  missionId: number;
-  type: 'new_mission_match' | 'mission_accepted' | 'mission_rejected' | 'new_message' | 'payment_received';
-  title: string;
-  message: string;
-  score?: number;
-  distance?: number;
-  urgency: 'low' | 'medium' | 'high';
-  metadata?: Record<string, any>;
-}
-
-export interface PushNotificationPayload {
-  to: string; // Token de l'appareil
-  title: string;
-  body: string;
-  data: {
-    type: string;
-    missionId: string;
-    nurseId: string;
-    score?: string;
-    distance?: string;
-  };
-  priority: 'high' | 'normal';
-  sound?: string;
-  badge?: number;
+export interface Notification {
+  id: string
+  userId: string
+  type: string
+  title: string
+  message: string
+  data?: any
+  read: boolean
+  createdAt: Date
+  updatedAt: Date
 }
 
 export class NotificationService {
-
   /**
-   * Crée une nouvelle notification pour un infirmier
+   * Créer une nouvelle notification
    */
-  async createNotification(data: NotificationData): Promise<any> {
-    try {
-      const db = await getDb();
-
-      const notification = {
-        nurseId: data.nurseId,
-        missionId: data.missionId,
+  async createNotification(data: {
+    userId: string
+    type: string
+    title: string
+    message: string
+    data?: any
+  }): Promise<Notification> {
+    return await prisma.notification.create({
+      data: {
+        userId: data.userId,
         type: data.type,
         title: data.title,
         message: data.message,
-        score: data.score || null,
-        distance: data.distance || null,
-        urgency: data.urgency,
-        metadata: data.metadata ? JSON.stringify(data.metadata) : null,
+        data: data.data || {},
         read: false,
-        createdAt: new Date(),
-        updatedAt: new Date()
-      };
-
-      const [newNotification] = await db
-        .insert(notifications)
-        .values(notification)
-        .returning();
-
-      console.log(`📨 Notification créée: ${newNotification.id} pour infirmier ${data.nurseId}`);
-
-      // Envoyer la notification push si possible
-      await this.sendPushNotification(newNotification);
-
-      return newNotification;
-
-    } catch (error) {
-      console.error("❌ Erreur création notification:", error);
-      throw error;
-    }
+      }
+    })
   }
 
   /**
-   * Récupère les notifications d'un infirmier
+   * Récupérer les notifications d'un utilisateur
    */
-  async getNurseNotifications(nurseId: number, limit: number = 20): Promise<any[]> {
-    try {
-      const db = await getDb();
-
-      const nurseNotifications = await db
-        .select()
-        .from(notifications)
-        .where(eq(notifications.nurseId, nurseId))
-        .orderBy(desc(notifications.createdAt))
-        .limit(limit);
-
-      return nurseNotifications;
-
-    } catch (error) {
-      console.error("❌ Erreur récupération notifications:", error);
-      throw error;
-    }
-  }
-
-  /**
-   * Marque une notification comme lue
-   */
-  async markAsRead(notificationId: number, nurseId: number): Promise<boolean> {
-    try {
-      const db = await getDb();
-
-      const [updated] = await db
-        .update(notifications)
-        .set({
-          read: true,
-          updatedAt: new Date()
-        })
-        .where(and(
-          eq(notifications.id, notificationId),
-          eq(notifications.nurseId, nurseId)
-        ))
-        .returning();
-
-      return !!updated;
-
-    } catch (error) {
-      console.error("❌ Erreur marquage notification:", error);
-      throw error;
-    }
-  }
-
-  /**
-   * Marque toutes les notifications d'un infirmier comme lues
-   */
-  async markAllAsRead(nurseId: number): Promise<number> {
-    try {
-      const db = await getDb();
-
-      const result = await db
-        .update(notifications)
-        .set({
-          read: true,
-          updatedAt: new Date()
-        })
-        .where(and(
-          eq(notifications.nurseId, nurseId),
-          eq(notifications.read, false)
-        ));
-
-      console.log(`✅ Toutes les notifications marquées comme lues pour infirmier ${nurseId}`);
-      return 1; // Succès
-
-    } catch (error) {
-      console.error("❌ Erreur marquage notifications:", error);
-      throw error;
-    }
-  }
-
-  /**
-   * Envoie une notification push vers l'app mobile
-   */
-  private async sendPushNotification(notification: any): Promise<void> {
-    try {
-      // TODO: Implémenter l'envoi de notifications push
-      // Pour l'instant, simulation avec console.log
-
-      const payload: PushNotificationPayload = {
-        to: `nurse_${notification.nurseId}`, // Token simulé
-        title: notification.title,
-        body: notification.message,
-        data: {
-          type: notification.type,
-          missionId: notification.missionId.toString(),
-          nurseId: notification.nurseId.toString(),
-          score: notification.score?.toString(),
-          distance: notification.distance?.toString()
-        },
-        priority: notification.urgency === 'high' ? 'high' : 'normal',
-        sound: notification.urgency === 'high' ? 'urgent.wav' : 'default.wav',
-        badge: 1
-      };
-
-      console.log(`📱 Push notification envoyée:`, {
-        nurseId: notification.nurseId,
-        title: payload.title,
-        urgency: notification.urgency,
-        timestamp: new Date().toISOString()
-      });
-
-      // TODO: Intégrer avec Expo Push Notifications ou Firebase
-      // await expo.sendPushNotificationsAsync([payload]);
-
-    } catch (error) {
-      console.error("❌ Erreur envoi push notification:", error);
-      // Ne pas faire échouer la création de notification si le push échoue
-    }
-  }
-
-  /**
-   * Envoie des notifications de matching à plusieurs infirmiers
-   */
-  async sendMatchingNotifications(matches: any[], mission: any): Promise<void> {
-    try {
-      console.log(`📱 Envoi de notifications de matching à ${matches.length} candidats`);
-
-      const notifications = matches.map(match => ({
-        nurseId: match.nurseId,
-        missionId: mission.id,
-        type: 'new_mission_match' as const,
-        title: 'Nouvelle mission correspondant à votre profil',
-        message: `Mission "${mission.title}" - Score de compatibilité : ${match.totalScore}%`,
-        score: match.totalScore,
-        distance: Math.round(match.distance * 10) / 10,
-        urgency: match.totalScore > 80 ? 'high' as const : match.totalScore > 60 ? 'medium' as const : 'low' as const,
-        metadata: {
-          algorithm: 'reinforced_deterministic',
-          confidence: match.confidence,
-          factors: match.factors
-        }
-      }));
-
-      // Créer toutes les notifications en parallèle
-      await Promise.all(
-        notifications.map(notificationData =>
-          this.createNotification(notificationData)
-        )
-      );
-
-      console.log(`✅ ${notifications.length} notifications de matching envoyées`);
-
-    } catch (error) {
-      console.error("❌ Erreur envoi notifications de matching:", error);
-      throw error;
-    }
-  }
-
-  /**
-   * Récupère les statistiques de notifications pour un infirmier
-   */
-  async getNotificationStats(nurseId: number): Promise<{
-    total: number;
-    unread: number;
-    today: number;
-    byType: Record<string, number>;
+  async getUserNotifications(userId: string, options: {
+    page?: number
+    limit?: number
+    unreadOnly?: boolean
+  }): Promise<{
+    data: Notification[]
+    total: number
+    unreadCount: number
   }> {
-    try {
-      const db = await getDb();
+    const { page = 1, limit = 20, unreadOnly = false } = options
+    const skip = (page - 1) * limit
 
-      const allNotifications = await db
-        .select()
-        .from(notifications)
-        .where(eq(notifications.nurseId, nurseId));
+    const where: any = { userId }
+    if (unreadOnly) {
+      where.read = false
+    }
 
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
+    const [notifications, total, unreadCount] = await Promise.all([
+      prisma.notification.findMany({
+        where,
+        skip,
+        take: limit,
+        orderBy: { createdAt: "desc" }
+      }),
+      prisma.notification.count({ where }),
+      prisma.notification.count({
+        where: { userId, read: false }
+      })
+    ])
 
-      const stats = {
-        total: allNotifications.length,
-        unread: allNotifications.filter(n => !n.read).length,
-        today: allNotifications.filter(n => new Date(n.createdAt) >= today).length,
-        byType: {} as Record<string, number>
-      };
+    return {
+      data: notifications,
+      total,
+      unreadCount
+    }
+  }
 
-      // Compter par type
-      allNotifications.forEach(notification => {
-        stats.byType[notification.type] = (stats.byType[notification.type] || 0) + 1;
-      });
+  /**
+   * Marquer une notification comme lue
+   */
+  async markAsRead(notificationId: string, userId: string): Promise<Notification | null> {
+    return await prisma.notification.update({
+      where: {
+        id: notificationId,
+        userId // Sécurité : vérifier que la notification appartient à l'utilisateur
+      },
+      data: { read: true }
+    })
+  }
 
-      return stats;
+  /**
+   * Marquer toutes les notifications comme lues
+   */
+  async markAllAsRead(userId: string): Promise<number> {
+    const result = await prisma.notification.updateMany({
+      where: {
+        userId,
+        read: false
+      },
+      data: { read: true }
+    })
 
-    } catch (error) {
-      console.error("❌ Erreur récupération stats notifications:", error);
-      throw error;
+    return result.count
+  }
+
+  /**
+   * Supprimer une notification
+   */
+  async deleteNotification(notificationId: string, userId: string): Promise<boolean> {
+    const result = await prisma.notification.deleteMany({
+      where: {
+        id: notificationId,
+        userId // Sécurité : vérifier que la notification appartient à l'utilisateur
+      }
+    })
+
+    return result.count > 0
+  }
+
+  /**
+   * Obtenir les statistiques des notifications
+   */
+  async getNotificationStats(userId: string): Promise<any> {
+    const [total, unread, today, thisWeek] = await Promise.all([
+      prisma.notification.count({ where: { userId } }),
+      prisma.notification.count({ where: { userId, read: false } }),
+      prisma.notification.count({
+        where: {
+          userId,
+          createdAt: {
+            gte: new Date(new Date().setHours(0, 0, 0, 0))
+          }
+        }
+      }),
+      prisma.notification.count({
+        where: {
+          userId,
+          createdAt: {
+            gte: new Date(new Date().setDate(new Date().getDate() - 7))
+          }
+        }
+      })
+    ])
+
+    return {
+      total,
+      unread,
+      today,
+      thisWeek,
+      readRate: total > 0 ? ((total - unread) / total * 100).toFixed(1) : "0"
+    }
+  }
+
+  /**
+   * Créer une notification pour une nouvelle candidature
+   */
+  async notifyNewApplication(missionId: number, nurseId: string, establishmentId: string): Promise<void> {
+    const mission = await prisma.mission.findUnique({
+      where: { id: missionId }
+    })
+
+    if (!mission) return
+
+    await this.createNotification({
+      userId: establishmentId,
+      type: "NEW_APPLICATION",
+      title: "Nouvelle candidature",
+      message: `Nouvelle candidature reçue pour la mission "${mission.title}"`,
+      data: {
+        missionId,
+        nurseId,
+        missionTitle: mission.title
+      }
+    })
+  }
+
+  /**
+   * Créer une notification pour un changement de statut de candidature
+   */
+  async notifyApplicationStatusChange(
+    applicationId: number,
+    nurseId: string,
+    status: string,
+    missionTitle: string
+  ): Promise<void> {
+    const statusMessages = {
+      ACCEPTED: "Votre candidature a été acceptée",
+      REJECTED: "Votre candidature a été refusée",
+      PENDING: "Votre candidature est en cours d'examen"
+    }
+
+    await this.createNotification({
+      userId: nurseId,
+      type: "APPLICATION_STATUS_CHANGE",
+      title: "Statut de candidature mis à jour",
+      message: `${statusMessages[status as keyof typeof statusMessages] || "Le statut de votre candidature a changé"} pour la mission "${missionTitle}"`,
+      data: {
+        applicationId,
+        status,
+        missionTitle
+      }
+    })
+  }
+
+  /**
+   * Créer une notification pour une nouvelle mission
+   */
+  async notifyNewMission(missionId: number, establishmentId: string): Promise<void> {
+    const mission = await prisma.mission.findUnique({
+      where: { id: missionId }
+    })
+
+    if (!mission) return
+
+    // Notifier tous les infirmiers qui correspondent aux critères
+    const nurses = await prisma.nurseProfile.findMany({
+      where: {
+        specializations: {
+          hasSome: mission.specializations || []
+        }
+      }
+    })
+
+    for (const nurse of nurses) {
+      await this.createNotification({
+        userId: nurse.userId,
+        type: "NEW_MISSION",
+        title: "Nouvelle mission disponible",
+        message: `Nouvelle mission disponible : "${mission.title}" à ${mission.location}`,
+        data: {
+          missionId,
+          missionTitle: mission.title,
+          location: mission.location,
+          hourlyRate: mission.hourlyRate
+        }
+      })
     }
   }
 }
 
-// Instance singleton
-export const notificationService = new NotificationService();
+export const notificationService = new NotificationService()

@@ -1,22 +1,22 @@
 /**
  * ==============================================================================
- * NurseLink AI - Routes d'Authentification NextAuth.js v5
+ * NurseLink AI - Routes d'Authentification
  * ==============================================================================
  *
- * Routes d'authentification pour NextAuth.js v5
+ * Routes d'authentification avec service personnalisé
  * Gestion des sessions, connexion, déconnexion, etc.
  * ==============================================================================
  */
 
 import { Router } from "express"
-import { handlers } from "../lib/auth"
+import { authService } from "../lib/simple-auth"
 
 const router = Router()
 
 // Route pour récupérer la session utilisateur
 router.get("/session", async (req, res) => {
   try {
-    const session = await handlers.GET(req, res)
+    const session = await authService.getSession(req)
     res.json(session)
   } catch (error) {
     console.error("Erreur récupération session:", error)
@@ -27,8 +27,31 @@ router.get("/session", async (req, res) => {
 // Route pour la connexion
 router.post("/signin", async (req, res) => {
   try {
-    const result = await handlers.POST(req, res)
-    res.json(result)
+    const { email, password } = req.body
+
+    if (!email || !password) {
+      return res.status(400).json({
+        error: "Email et mot de passe requis",
+        code: "MISSING_CREDENTIALS"
+      })
+    }
+
+    const user = await authService.authenticateUser(email, password)
+
+    if (!user) {
+      return res.status(401).json({
+        error: "Identifiants invalides",
+        code: "INVALID_CREDENTIALS"
+      })
+    }
+
+    const token = authService.createToken(user)
+
+    res.json({
+      user,
+      token,
+      expires: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
+    })
   } catch (error) {
     console.error("Erreur connexion:", error)
     res.status(500).json({ error: "Erreur de connexion" })
@@ -38,8 +61,8 @@ router.post("/signin", async (req, res) => {
 // Route pour la déconnexion
 router.post("/signout", async (req, res) => {
   try {
-    const result = await handlers.POST(req, res)
-    res.json(result)
+    // En JWT, la déconnexion se fait côté client en supprimant le token
+    res.json({ message: "Déconnexion réussie" })
   } catch (error) {
     console.error("Erreur déconnexion:", error)
     res.status(500).json({ error: "Erreur de déconnexion" })
@@ -49,7 +72,7 @@ router.post("/signout", async (req, res) => {
 // Route pour récupérer l'utilisateur connecté
 router.get("/user", async (req, res) => {
   try {
-    const session = await handlers.GET(req, res)
+    const session = await authService.getSession(req)
 
     if (!session?.user) {
       return res.status(401).json({
@@ -96,7 +119,7 @@ router.get("/user", async (req, res) => {
 // Route pour mettre à jour le profil utilisateur
 router.put("/user", async (req, res) => {
   try {
-    const session = await handlers.GET(req, res)
+    const session = await authService.getSession(req)
 
     if (!session?.user) {
       return res.status(401).json({
@@ -110,10 +133,7 @@ router.put("/user", async (req, res) => {
 
     const updatedUser = await prisma.user.update({
       where: { id: session.user.id },
-      data: {
-        name: name || undefined,
-        role: role || undefined,
-      },
+      data: { name, role },
       include: {
         nurseProfile: true,
         establishmentProfile: true,
@@ -141,7 +161,7 @@ router.put("/user", async (req, res) => {
 // Route pour créer un profil infirmier
 router.post("/nurse-profile", async (req, res) => {
   try {
-    const session = await handlers.GET(req, res)
+    const session = await authService.getSession(req)
 
     if (!session?.user) {
       return res.status(401).json({
@@ -177,7 +197,7 @@ router.post("/nurse-profile", async (req, res) => {
 // Route pour créer un profil établissement
 router.post("/establishment-profile", async (req, res) => {
   try {
-    const session = await handlers.GET(req, res)
+    const session = await authService.getSession(req)
 
     if (!session?.user) {
       return res.status(401).json({
