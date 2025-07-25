@@ -2,7 +2,7 @@
  * Hook d'authentification complet pour NurseLink AI
  */
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, createContext, useContext } from "react";
 import { useToast } from "./use-toast";
 
 interface User {
@@ -27,7 +27,20 @@ interface RegisterData {
   [key: string]: any;
 }
 
-export function useAuth() {
+interface AuthContextType {
+  user: User | null;
+  isAuthenticated: boolean;
+  isLoading: boolean;
+  login: (credentials: LoginCredentials) => Promise<{ success: boolean; error?: string }>;
+  register: (data: RegisterData) => Promise<{ success: boolean; error?: string }>;
+  logout: () => Promise<void>;
+  isLoginLoading: boolean;
+  isRegisterLoading: boolean;
+}
+
+const AuthContext = createContext<AuthContextType | undefined>(undefined);
+
+export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isLoginLoading, setIsLoginLoading] = useState(false);
@@ -36,6 +49,7 @@ export function useAuth() {
 
   // Vérifier l'authentification au chargement
   useEffect(() => {
+    console.log('[AuthProvider] Vérification de l\'authentification...');
     checkAuth();
   }, []);
 
@@ -49,11 +63,14 @@ export function useAuth() {
         const session = await response.json();
         if (session.user) {
           setUser(session.user);
+          console.log('[AuthProvider] Utilisateur authentifié:', session.user);
         } else {
           setUser(null);
+          console.log('[AuthProvider] Aucun utilisateur authentifié');
         }
       } else {
         setUser(null);
+        console.log('[AuthProvider] Session invalide');
       }
     } catch (error) {
       console.error("Erreur vérification auth:", error);
@@ -148,7 +165,7 @@ export function useAuth() {
     }
   };
 
-  return {
+  const value = {
     user,
     isAuthenticated: !!user,
     isLoading,
@@ -158,4 +175,18 @@ export function useAuth() {
     isLoginLoading,
     isRegisterLoading,
   };
+
+  return (
+    <AuthContext.Provider value={value}>
+      {children}
+    </AuthContext.Provider>
+  );
+}
+
+export function useAuth() {
+  const context = useContext(AuthContext);
+  if (context === undefined) {
+    throw new Error("useAuth must be used within an AuthProvider");
+  }
+  return context;
 }
