@@ -10,8 +10,10 @@
 
 import jwt from "jsonwebtoken"
 import bcrypt from "bcryptjs"
-import { prisma } from "./prisma"
-import { UserRole } from "@prisma/client"
+import { db } from './drizzle';
+import { users } from '../../shared/schema';
+import { eq } from 'drizzle-orm';
+import type { UserRole } from '../../shared/schema';
 
 export interface User {
   id: string
@@ -33,10 +35,7 @@ export class AuthService {
 
   async authenticateUser(email: string, password: string): Promise<User | null> {
     try {
-      const user = await prisma.user.findUnique({
-        where: { email },
-        include: { nurseProfile: true, establishmentProfile: true }
-      })
+      const user = await db.select().from(users).where(eq(users.email, email))
 
       if (!user) {
         return null
@@ -101,9 +100,7 @@ export class AuthService {
         return null
       }
 
-      const user = await prisma.user.findUnique({
-        where: { id: decoded.id }
-      })
+      const user = await db.select().from(users).where(eq(users.id, decoded.id))
 
       if (!user) {
         return null
@@ -133,23 +130,14 @@ export class AuthService {
     establishmentId?: string
   }): Promise<User | null> {
     try {
-      const user = await prisma.user.create({
-        data: {
-          email: userData.email,
-          name: userData.name,
-          role: userData.role,
-          establishmentId: userData.establishmentId,
-        }
-      })
+      const user = await db.insert(users).values({
+        email: userData.email,
+        name: userData.name,
+        role: userData.role,
+        establishmentId: userData.establishmentId,
+      }).returning()
 
-      return {
-        id: user.id,
-        email: user.email,
-        name: user.name,
-        role: user.role,
-        image: user.image,
-        establishmentId: user.establishmentId,
-      }
+      return user[0]
     } catch (error) {
       console.error("Erreur création utilisateur:", error)
       return null
@@ -158,19 +146,9 @@ export class AuthService {
 
   async updateUser(userId: string, userData: Partial<User>): Promise<User | null> {
     try {
-      const user = await prisma.user.update({
-        where: { id: userId },
-        data: userData
-      })
+      const user = await db.update(users).set(userData).where(eq(users.id, userId)).returning()
 
-      return {
-        id: user.id,
-        email: user.email,
-        name: user.name,
-        role: user.role,
-        image: user.image,
-        establishmentId: user.establishmentId,
-      }
+      return user[0]
     } catch (error) {
       console.error("Erreur mise à jour utilisateur:", error)
       return null

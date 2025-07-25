@@ -8,8 +8,52 @@
  * ==============================================================================
  */
 
-import { prisma } from "../lib/prisma"
-import { MissionStatus, ApplicationStatus, UserRole } from "@prisma/client"
+import { db } from '../lib/drizzle';
+import {
+  users,
+  nurseProfiles,
+  establishmentProfiles,
+  missions,
+  missionApplications,
+  documents,
+  contracts,
+  notifications
+} from '../../shared/schema';
+import { eq, and, desc, asc } from 'drizzle-orm';
+import type {
+  User,
+  NurseProfile,
+  EstablishmentProfile,
+  Mission,
+  MissionApplication,
+  Document,
+  Contract,
+  Notification
+} from '../../shared/schema';
+
+// Types pour la compatibilité
+export type { User, NurseProfile, EstablishmentProfile, Mission, MissionApplication, Document, Contract, Notification };
+
+// Constantes pour les statuts
+export const MissionStatus = {
+  DRAFT: 'draft',
+  PUBLISHED: 'published',
+  IN_PROGRESS: 'in_progress',
+  COMPLETED: 'completed',
+  CANCELLED: 'cancelled'
+} as const;
+
+export const ApplicationStatus = {
+  PENDING: 'pending',
+  ACCEPTED: 'accepted',
+  REJECTED: 'rejected',
+  WITHDRAWN: 'withdrawn'
+} as const;
+
+export const UserRole = {
+  NURSE: 'nurse',
+  ESTABLISHMENT: 'establishment'
+} as const;
 
 export interface Mission {
   id: string
@@ -75,59 +119,32 @@ export class StorageService {
   // ==============================================================================
 
   async createMission(data: any): Promise<Mission> {
-    return await prisma.mission.create({
-      data: {
-        title: data.title,
-        description: data.description,
-        location: data.location,
-        startDate: new Date(data.startDate),
-        endDate: new Date(data.endDate),
-        hourlyRate: data.hourlyRate,
-        requirements: data.requirements,
-        specializations: data.specializations || [],
-        duration: data.duration || 8,
-        establishmentId: data.establishmentId,
-        status: data.status || "OPEN",
-      }
-    })
+    return await db.insert(missions).returning().execute().then(res => res.items[0]);
   }
 
   async getMission(id: string): Promise<Mission | null> {
-    return await prisma.mission.findUnique({
-      where: { id }
-    })
+    return await db.select().from(missions).where(eq(missions.id, id)).execute().then(res => res.items[0]);
   }
 
   async getMissionsByEstablishment(establishmentId: string): Promise<Mission[]> {
-    return await prisma.mission.findMany({
-      where: { establishmentId }
-    })
+    return await db.select().from(missions).where(eq(missions.establishmentId, establishmentId)).execute();
   }
 
   async getAvailableMissions(): Promise<Mission[]> {
-    return await prisma.mission.findMany({
-      where: { status: "OPEN" }
-    })
+    return await db.select().from(missions).where(eq(missions.status, MissionStatus.PUBLISHED)).execute();
   }
 
   async updateMissionStatus(id: string, status: MissionStatus): Promise<Mission> {
-    return await prisma.mission.update({
-      where: { id },
-      data: { status }
-    })
+    return await db.update(missions).set({ status }).where(eq(missions.id, id)).returning().execute().then(res => res.items[0]);
   }
 
   async searchMissions(query: string, filters: any): Promise<Mission[]> {
-    return await prisma.mission.findMany({
-      where: {
-        OR: [
-          { title: { contains: query, mode: "insensitive" } },
-          { description: { contains: query, mode: "insensitive" } },
-          { location: { contains: query, mode: "insensitive" } }
-        ],
-        ...filters
-      }
-    })
+    const where = [
+      and(eq(missions.title, query), eq(missions.status, MissionStatus.PUBLISHED)),
+      and(eq(missions.description, query), eq(missions.status, MissionStatus.PUBLISHED)),
+      and(eq(missions.location, query), eq(missions.status, MissionStatus.PUBLISHED))
+    ];
+    return await db.select().from(missions).where(or(...where)).execute();
   }
 
   // ==============================================================================
@@ -135,34 +152,15 @@ export class StorageService {
   // ==============================================================================
 
   async createMissionApplication(data: any): Promise<MissionApplication> {
-    return await prisma.missionApplication.create({
-      data: {
-        missionId: data.missionId,
-        nurseId: data.nurseId,
-        coverLetter: data.coverLetter,
-        proposedRate: data.proposedRate,
-        status: data.status || "PENDING",
-      }
-    })
+    return await db.insert(missionApplications).returning().execute().then(res => res.items[0]);
   }
 
   async getMissionApplication(id: string): Promise<MissionApplication | null> {
-    return await prisma.missionApplication.findUnique({
-      where: { id }
-    })
+    return await db.select().from(missionApplications).where(eq(missionApplications.id, id)).execute().then(res => res.items[0]);
   }
 
   async getMissionApplications(missionId: string): Promise<MissionApplication[]> {
-    return await prisma.missionApplication.findMany({
-      where: { missionId },
-      include: {
-        nurse: {
-          include: {
-            nurseProfile: true
-          }
-        }
-      }
-    })
+    return await db.select().from(missionApplications).where(eq(missionApplications.missionId, missionId)).execute();
   }
 
   async updateMissionApplicationStatus(
@@ -170,10 +168,7 @@ export class StorageService {
     status: ApplicationStatus,
     feedback?: string
   ): Promise<MissionApplication> {
-    return await prisma.missionApplication.update({
-      where: { id },
-      data: { status }
-    })
+    return await db.update(missionApplications).set({ status }).where(eq(missionApplications.id, id)).returning().execute().then(res => res.items[0]);
   }
 
   // ==============================================================================
@@ -181,45 +176,27 @@ export class StorageService {
   // ==============================================================================
 
   async getEstablishmentProfile(userId: string): Promise<EstablishmentProfile | null> {
-    return await prisma.establishmentProfile.findUnique({
-      where: { userId }
-    })
+    return await db.select().from(establishmentProfiles).where(eq(establishmentProfiles.userId, userId)).execute().then(res => res.items[0]);
   }
 
   async createEstablishmentProfile(data: any): Promise<EstablishmentProfile> {
-    return await prisma.establishmentProfile.create({
-      data: {
-        userId: data.userId,
-        name: data.name,
-        type: data.type,
-        address: data.address,
-        phone: data.phone,
-        specialties: data.specializations || [],
-        capacity: data.capacity,
-        description: data.description,
-      }
-    })
+    return await db.insert(establishmentProfiles).returning().execute().then(res => res.items[0]);
   }
 
   async updateEstablishmentProfile(userId: string, data: any): Promise<EstablishmentProfile | null> {
-    return await prisma.establishmentProfile.update({
-      where: { userId },
-      data: {
-        name: data.name,
-        type: data.type,
-        address: data.address,
-        phone: data.phone,
-        specialties: data.specializations,
-        capacity: data.capacity,
-        description: data.description,
-      }
-    })
+    return await db.update(establishmentProfiles).set({
+      name: data.name,
+      type: data.type,
+      address: data.address,
+      phone: data.phone,
+      specialties: data.specializations,
+      capacity: data.capacity,
+      description: data.description,
+    }).where(eq(establishmentProfiles.userId, userId)).returning().execute().then(res => res.items[0]);
   }
 
   async getNurseProfile(userId: string): Promise<NurseProfile | null> {
-    return await prisma.nurseProfile.findUnique({
-      where: { userId }
-    })
+    return await db.select().from(nurseProfiles).where(eq(nurseProfiles.userId, userId)).execute().then(res => res.items[0]);
   }
 
   // ==============================================================================
@@ -227,33 +204,10 @@ export class StorageService {
   // ==============================================================================
 
   async getEstablishmentStats(establishmentId: string): Promise<any> {
-    const missions = await prisma.mission.count({
-      where: { establishmentId }
-    })
-
-    const activeMissions = await prisma.mission.count({
-      where: {
-        establishmentId,
-        status: "OPEN"
-      }
-    })
-
-    const applications = await prisma.missionApplication.count({
-      where: {
-        mission: {
-          establishmentId
-        }
-      }
-    })
-
-    const pendingApplications = await prisma.missionApplication.count({
-      where: {
-        mission: {
-          establishmentId
-        },
-        status: "PENDING"
-      }
-    })
+    const missions = await db.select().from(missions).count().where(eq(missions.establishmentId, establishmentId));
+    const activeMissions = await db.select().from(missions).count().where(and(eq(missions.establishmentId, establishmentId), eq(missions.status, MissionStatus.PUBLISHED)));
+    const applications = await db.select().from(missionApplications).count();
+    const pendingApplications = await db.select().from(missionApplications).count().where(eq(missionApplications.status, ApplicationStatus.PENDING));
 
     return {
       totalMissions: missions,
@@ -274,24 +228,8 @@ export class StorageService {
     }
 
     const [missions, total] = await Promise.all([
-      prisma.mission.findMany({
-        where,
-        skip,
-        take: limit,
-        orderBy: { createdAt: "desc" },
-        include: {
-          applications: {
-            include: {
-              nurse: {
-                include: {
-                  nurseProfile: true
-                }
-              }
-            }
-          }
-        }
-      }),
-      prisma.mission.count({ where })
+      db.select().from(missions).where(eq(missions.establishmentId, establishmentId)).execute(),
+      db.select().from(missions).count().where(eq(missions.establishmentId, establishmentId))
     ])
 
     return {
@@ -305,20 +243,19 @@ export class StorageService {
   // ==============================================================================
 
   async getMissionWithApplications(missionId: string): Promise<any> {
-    return await prisma.mission.findUnique({
-      where: { id: missionId },
-      include: {
-        applications: {
-          include: {
-            nurse: {
-              include: {
-                nurseProfile: true
-              }
-            }
+    return await db.select().from(missions).where(eq(missions.id, missionId)).execute().then(res => {
+      const mission = res.items[0];
+      return {
+        ...mission,
+        applications: res.items.map(app => ({
+          ...app,
+          nurse: {
+            ...app.nurse,
+            nurseProfile: app.nurse.nurseProfile
           }
-        }
-      }
-    })
+        }))
+      };
+    });
   }
 }
 

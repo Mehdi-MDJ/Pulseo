@@ -1,77 +1,51 @@
 # ==============================================================================
-# NurseLink AI - Dockerfile Production
+# NurseLink AI - Dockerfile Frontend Production
 # ==============================================================================
 #
-# Dockerfile optimisé pour la production avec multi-stage build
-# Sécurité renforcée et performances optimisées
+# Dockerfile optimisé pour le frontend en production
+# Multi-stage build avec Nginx pour servir les fichiers statiques
 # ==============================================================================
 
-# Stage 1: Dependencies
-FROM node:18-alpine AS deps
-
-# Installer les dépendances système nécessaires
-RUN apk add --no-cache libc6-compat
-
+# Stage 1: Build Frontend
+FROM node:18 AS frontend-builder
 WORKDIR /app
 
-# Copier les fichiers de dépendances
-COPY package.json package-lock.json ./
+# Copier les fichiers de paquets et installer les dépendances à la racine
+COPY package*.json ./
+RUN npm install
 
-# Installer les dépendances
-RUN npm ci --only=production && npm cache clean --force
-
-# Stage 2: Builder
-FROM node:18-alpine AS builder
-
-WORKDIR /app
-
-# Copier les fichiers de dépendances
-COPY package.json package-lock.json ./
-
-# Installer toutes les dépendances (incluant devDependencies)
-RUN npm ci
-
-# Copier le code source
+# Copier le reste du code et construire l'application
 COPY . .
-
-# Générer le client Prisma
-RUN npx prisma generate
-
-# Builder l'application
 RUN npm run build
 
-# Stage 3: Production
-FROM node:18-alpine AS runner
+# Stage 2: Production avec Nginx
+FROM nginx:alpine AS production
+
+# Copier la configuration Nginx personnalisée
+COPY nginx/nginx.conf /etc/nginx/nginx.conf
+
+# Copier les fichiers buildés depuis le stage précédent
+COPY --from=frontend-builder /app/dist /usr/share/nginx/html
 
 # Créer un utilisateur non-root pour la sécurité
-RUN addgroup --system --gid 1001 nodejs
-RUN adduser --system --uid 1001 nextjs
+RUN addgroup -g 1001 -S nginx && \
+    adduser -S -D -H -u 1001 -h /var/cache/nginx -s /sbin/nologin -G nginx -g nginx nginx
 
-WORKDIR /app
-
-# Variables d'environnement pour la production
-ENV NODE_ENV=production
-ENV PORT=5000
-
-# Copier les fichiers nécessaires depuis les stages précédents
-COPY --from=deps --chown=nextjs:nodejs /app/node_modules ./node_modules
-COPY --from=builder --chown=nextjs:nodejs /app/generated ./generated
-COPY --from=builder --chown=nextjs:nodejs /app/dist ./dist
-COPY --from=builder --chown=nextjs:nodejs /app/package.json ./package.json
-COPY --from=builder --chown=nextjs:nodejs /app/prisma ./prisma
-
-# Créer les dossiers nécessaires
-RUN mkdir -p /app/logs && chown nextjs:nodejs /app/logs
+# Changer les permissions
+RUN chown -R nginx:nginx /usr/share/nginx/html && \
+    chown -R nginx:nginx /var/cache/nginx && \
+    chown -R nginx:nginx /var/log/nginx && \
+    chown -R nginx:nginx /etc/nginx/conf.d
 
 # Passer à l'utilisateur non-root
-USER nextjs
+USER nginx
 
 # Exposer le port
-EXPOSE 5000
+EXPOSE 80
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-  CMD node -e "require('http').get('http://localhost:5000/health', (res) => { process.exit(res.statusCode === 200 ? 0 : 1) })"
+  CMD wget --no-verbose --tries=1 --spider http://localhost:80/ || exit 1
 
 # Commande de démarrage
-CMD ["npm", "start"]
+CMD ["nginx", "-g", "daemon off;"]

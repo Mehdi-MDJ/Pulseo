@@ -1,0 +1,4 @@
+packages:
+  - 'server'
+  - 'mobile'
+  - '.' # Le paquet racine (front-end)
