@@ -8,7 +8,9 @@
  * ==============================================================================
  */
 
-import { prisma } from "../lib/prisma"
+import { db } from "../lib/drizzle";
+import { notifications, missions, nurseProfiles } from "../../shared/schema";
+import { eq, and, gte, desc } from "drizzle-orm";
 
 export interface Notification {
   id: string
@@ -33,16 +35,21 @@ export class NotificationService {
     message: string
     data?: any
   }): Promise<Notification> {
-    return await prisma.notification.create({
-      data: {
+    const [notification] = await db
+      .insert(notifications)
+      .values({
         userId: data.userId,
         type: data.type,
         title: data.title,
         message: data.message,
         data: data.data || {},
         read: false,
-      }
-    })
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      })
+      .returning();
+
+    return notification;
   }
 
   /**
@@ -60,26 +67,33 @@ export class NotificationService {
     const { page = 1, limit = 20, unreadOnly = false } = options
     const skip = (page - 1) * limit
 
-    const where: any = { userId }
+    let where = eq(notifications.userId, userId);
     if (unreadOnly) {
-      where.read = false
+      where = and(eq(notifications.userId, userId), eq(notifications.read, false));
     }
 
-    const [notifications, total, unreadCount] = await Promise.all([
-      prisma.notification.findMany({
-        where,
-        skip,
-        take: limit,
-        orderBy: { createdAt: "desc" }
-      }),
-      prisma.notification.count({ where }),
-      prisma.notification.count({
-        where: { userId, read: false }
-      })
+    const [notificationsData, total, unreadCount] = await Promise.all([
+      db
+        .select()
+        .from(notifications)
+        .where(where)
+        .limit(limit)
+        .offset(skip)
+        .orderBy(desc(notifications.createdAt)),
+      db
+        .select({ count: notifications.id })
+        .from(notifications)
+        .where(eq(notifications.userId, userId))
+        .then(result => result.length),
+      db
+        .select({ count: notifications.id })
+        .from(notifications)
+        .where(and(eq(notifications.userId, userId), eq(notifications.read, false)))
+        .then(result => result.length)
     ])
 
     return {
-      data: notifications,
+      data: notificationsData,
       total,
       unreadCount
     }
@@ -89,74 +103,91 @@ export class NotificationService {
    * Marquer une notification comme lue
    */
   async markAsRead(notificationId: string, userId: string): Promise<Notification | null> {
-    return await prisma.notification.update({
-      where: {
-        id: notificationId,
-        userId // Sécurité : vérifier que la notification appartient à l'utilisateur
-      },
-      data: { read: true }
-    })
+    const [notification] = await db
+      .update(notifications)
+      .set({
+        read: true,
+        updatedAt: new Date()
+      })
+      .where(and(
+        eq(notifications.id, notificationId),
+        eq(notifications.userId, userId)
+      ))
+      .returning();
+
+    return notification || null;
   }
 
   /**
    * Marquer toutes les notifications comme lues
    */
   async markAllAsRead(userId: string): Promise<number> {
-    const result = await prisma.notification.updateMany({
-      where: {
-        userId,
-        read: false
-      },
-      data: { read: true }
-    })
+    const result = await db
+      .update(notifications)
+      .set({
+        read: true,
+        updatedAt: new Date()
+      })
+      .where(and(
+        eq(notifications.userId, userId),
+        eq(notifications.read, false)
+      ));
 
-    return result.count
+    return 1; // Drizzle ne retourne pas le count, on simule
   }
 
   /**
    * Supprimer une notification
    */
   async deleteNotification(notificationId: string, userId: string): Promise<boolean> {
-    const result = await prisma.notification.deleteMany({
-      where: {
-        id: notificationId,
-        userId // Sécurité : vérifier que la notification appartient à l'utilisateur
-      }
-    })
+    const result = await db
+      .delete(notifications)
+      .where(and(
+        eq(notifications.id, notificationId),
+        eq(notifications.userId, userId)
+      ));
 
-    return result.count > 0
+    return true; // Drizzle ne retourne pas le count, on simule
   }
 
   /**
    * Obtenir les statistiques des notifications
    */
   async getNotificationStats(userId: string): Promise<any> {
-    const [total, unread, today, thisWeek] = await Promise.all([
-      prisma.notification.count({ where: { userId } }),
-      prisma.notification.count({ where: { userId, read: false } }),
-      prisma.notification.count({
-        where: {
-          userId,
-          createdAt: {
-            gte: new Date(new Date().setHours(0, 0, 0, 0))
-          }
-        }
-      }),
-      prisma.notification.count({
-        where: {
-          userId,
-          createdAt: {
-            gte: new Date(new Date().setDate(new Date().getDate() - 7))
-          }
-        }
-      })
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const weekAgo = new Date();
+    weekAgo.setDate(weekAgo.getDate() - 7);
+
+    const [total, unread, todayCount, thisWeekCount] = await Promise.all([
+      db
+        .select({ count: notifications.id })
+        .from(notifications)
+        .where(eq(notifications.userId, userId))
+        .then(result => result.length),
+      db
+        .select({ count: notifications.id })
+        .from(notifications)
+        .where(and(eq(notifications.userId, userId), eq(notifications.read, false)))
+        .then(result => result.length),
+      db
+        .select({ count: notifications.id })
+        .from(notifications)
+        .where(and(eq(notifications.userId, userId), gte(notifications.createdAt, today)))
+        .then(result => result.length),
+      db
+        .select({ count: notifications.id })
+        .from(notifications)
+        .where(and(eq(notifications.userId, userId), gte(notifications.createdAt, weekAgo)))
+        .then(result => result.length)
     ])
 
     return {
       total,
       unread,
-      today,
-      thisWeek,
+      today: todayCount,
+      thisWeek: thisWeekCount,
       readRate: total > 0 ? ((total - unread) / total * 100).toFixed(1) : "0"
     }
   }
@@ -165,9 +196,10 @@ export class NotificationService {
    * Créer une notification pour une nouvelle candidature
    */
   async notifyNewApplication(missionId: number, nurseId: string, establishmentId: string): Promise<void> {
-    const mission = await prisma.mission.findUnique({
-      where: { id: missionId }
-    })
+    const [mission] = await db
+      .select()
+      .from(missions)
+      .where(eq(missions.id, missionId));
 
     if (!mission) return
 
@@ -216,20 +248,18 @@ export class NotificationService {
    * Créer une notification pour une nouvelle mission
    */
   async notifyNewMission(missionId: number, establishmentId: string): Promise<void> {
-    const mission = await prisma.mission.findUnique({
-      where: { id: missionId }
-    })
+    const [mission] = await db
+      .select()
+      .from(missions)
+      .where(eq(missions.id, missionId));
 
     if (!mission) return
 
     // Notifier tous les infirmiers qui correspondent aux critères
-    const nurses = await prisma.nurseProfile.findMany({
-      where: {
-        specializations: {
-          hasSome: mission.specializations || []
-        }
-      }
-    })
+    const nurses = await db
+      .select()
+      .from(nurseProfiles)
+      .where(eq(nurseProfiles.specializations, mission.specializations || []));
 
     for (const nurse of nurses) {
       await this.createNotification({

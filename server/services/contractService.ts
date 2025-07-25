@@ -8,7 +8,9 @@
  * ==============================================================================
  */
 
-import { prisma } from "../lib/prisma"
+import { db } from "../lib/drizzle";
+import { contracts, missions, nurseProfiles, establishmentProfiles } from "../../shared/schema";
+import { eq, and } from "drizzle-orm";
 
 export interface Contract {
   id: string
@@ -36,22 +38,25 @@ export class ContractService {
   ): Promise<Contract> {
     try {
       // Récupérer les informations de la mission
-      const mission = await prisma.mission.findUnique({
-        where: { id: missionId }
-      })
+      const [mission] = await db
+        .select()
+        .from(missions)
+        .where(eq(missions.id, missionId));
 
       if (!mission) {
         throw new Error("Mission non trouvée")
       }
 
       // Récupérer les profils
-      const nurseProfile = await prisma.nurseProfile.findUnique({
-        where: { userId: nurseId }
-      })
+      const [nurseProfile] = await db
+        .select()
+        .from(nurseProfiles)
+        .where(eq(nurseProfiles.userId, nurseId));
 
-      const establishmentProfile = await prisma.establishmentProfile.findUnique({
-        where: { userId: establishmentId }
-      })
+      const [establishmentProfile] = await db
+        .select()
+        .from(establishmentProfiles)
+        .where(eq(establishmentProfiles.userId, establishmentId));
 
       if (!nurseProfile || !establishmentProfile) {
         throw new Error("Profils manquants")
@@ -98,16 +103,19 @@ export class ContractService {
       }
 
       // Créer le contrat
-      const contract = await prisma.contract.create({
-        data: {
+      const [contract] = await db
+        .insert(contracts)
+        .values({
           contractNumber,
           missionId,
           nurseId,
           establishmentId,
           status: "PENDING",
           terms: contractTerms,
-        }
-      })
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        })
+        .returning();
 
       console.log(`✅ Contrat généré: ${contractNumber}`)
       return contract
@@ -122,9 +130,12 @@ export class ContractService {
    * Récupérer un contrat par ID
    */
   async getContract(id: string): Promise<Contract | null> {
-    return await prisma.contract.findUnique({
-      where: { id }
-    })
+    const [contract] = await db
+      .select()
+      .from(contracts)
+      .where(eq(contracts.id, id));
+
+    return contract || null;
   }
 
   /**
@@ -132,82 +143,91 @@ export class ContractService {
    */
   async getUserContracts(userId: string, role: string): Promise<Contract[]> {
     const where = role === "NURSE"
-      ? { nurseId: userId }
-      : { establishmentId: userId }
+      ? eq(contracts.nurseId, userId)
+      : eq(contracts.establishmentId, userId);
 
-    return await prisma.contract.findMany({
-      where,
-      orderBy: { createdAt: "desc" }
-    })
+    return await db
+      .select()
+      .from(contracts)
+      .where(where)
+      .orderBy(contracts.createdAt);
   }
 
   /**
    * Signer un contrat (côté infirmier)
    */
   async signContractNurse(contractId: string, signature: string): Promise<Contract> {
-    const contract = await prisma.contract.update({
-      where: { id: contractId },
-      data: {
+    const [contract] = await db
+      .update(contracts)
+      .set({
         nurseSignature: signature,
         status: "NURSE_SIGNED",
         updatedAt: new Date()
-      }
-    })
+      })
+      .where(eq(contracts.id, contractId))
+      .returning();
 
     // Si l'établissement a déjà signé, marquer comme signé
     if (contract.establishmentSignature) {
-      await this.finalizeContract(contractId)
+      await this.finalizeContract(contractId);
     }
 
-    return contract
+    return contract;
   }
 
   /**
    * Signer un contrat (côté établissement)
    */
   async signContractEstablishment(contractId: string, signature: string): Promise<Contract> {
-    const contract = await prisma.contract.update({
-      where: { id: contractId },
-      data: {
+    const [contract] = await db
+      .update(contracts)
+      .set({
         establishmentSignature: signature,
         status: "ESTABLISHMENT_SIGNED",
         updatedAt: new Date()
-      }
-    })
+      })
+      .where(eq(contracts.id, contractId))
+      .returning();
 
     // Si l'infirmier a déjà signé, marquer comme signé
     if (contract.nurseSignature) {
-      await this.finalizeContract(contractId)
+      await this.finalizeContract(contractId);
     }
 
-    return contract
+    return contract;
   }
 
   /**
    * Finaliser un contrat (les deux parties ont signé)
    */
   private async finalizeContract(contractId: string): Promise<Contract> {
-    return await prisma.contract.update({
-      where: { id: contractId },
-      data: {
+    const [contract] = await db
+      .update(contracts)
+      .set({
         status: "SIGNED",
         signedAt: new Date(),
         updatedAt: new Date()
-      }
-    })
+      })
+      .where(eq(contracts.id, contractId))
+      .returning();
+
+    return contract;
   }
 
   /**
    * Annuler un contrat
    */
   async cancelContract(contractId: string, reason: string): Promise<Contract> {
-    return await prisma.contract.update({
-      where: { id: contractId },
-      data: {
+    const [contract] = await db
+      .update(contracts)
+      .set({
         status: "CANCELLED",
         updatedAt: new Date()
-      }
-    })
+      })
+      .where(eq(contracts.id, contractId))
+      .returning();
+
+    return contract;
   }
 
   /**

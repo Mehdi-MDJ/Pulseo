@@ -3,42 +3,15 @@
  */
 
 import { useState, useEffect } from "react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { useAuth } from "../hooks/useAuth";
+import { useAuth } from "@/hooks/useAuth";
 import { Redirect } from "wouter";
-
-interface LoginData {
-  email: string;
-  password: string;
-}
-
-interface RegisterData {
-  email: string;
-  password: string;
-  firstName: string;
-  lastName: string;
-  role: "nurse" | "establishment";
-  // Champs spécifiques aux infirmiers
-  rppsNumber?: string;
-  adeliNumber?: string;
-  specialization?: string;
-  experience?: string;
-  // Champs spécifiques aux établissements
-  establishmentName?: string;
-  establishmentType?: string;
-  siretNumber?: string;
-  address?: string;
-  contactPhone?: string;
-}
+import { LoginForm } from "@/components/auth/LoginForm";
+import { RegisterForm } from "@/components/auth/RegisterForm";
 
 export default function AuthPage() {
-  const { user, isAuthenticated, login, register, isLoginLoading, isRegisterLoading } = useAuth();
-  const [loginData, setLoginData] = useState<LoginData>({ email: "", password: "" });
+  const { isAuthenticated } = useAuth();
 
   // Gestion du thème depuis localStorage
   useEffect(() => {
@@ -57,42 +30,6 @@ export default function AuthPage() {
       }
     }
   }, []);
-  const [registerData, setRegisterData] = useState<RegisterData>({
-    email: "",
-    password: "",
-    firstName: "",
-    lastName: "",
-    role: "nurse",
-    // Champs infirmiers
-    rppsNumber: "",
-    adeliNumber: "",
-    specialization: "",
-    experience: "",
-    // Champs établissements
-    establishmentName: "",
-    establishmentType: "",
-    siretNumber: "",
-    address: "",
-    contactPhone: ""
-  });
-  const handleLogin = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!loginData.email || !loginData.password) {
-      return;
-    }
-    login(loginData);
-  };
-
-  const handleRegister = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!registerData.email || !registerData.password || !registerData.firstName || !registerData.lastName) {
-      return;
-    }
-    if (registerData.password.length < 6) {
-      return;
-    }
-    register(registerData);
-  };
 
   // Redirection si déjà connecté
   if (isAuthenticated) {
@@ -149,219 +86,13 @@ export default function AuthPage() {
               </TabsList>
 
               {/* Formulaire de connexion */}
-              <TabsContent value="login" className="space-y-4">
-                <form onSubmit={handleLogin} className="space-y-4">
-                  <div>
-                    <Label htmlFor="login-email">Email</Label>
-                    <Input
-                      id="login-email"
-                      type="email"
-                      placeholder="votre@email.com"
-                      value={loginData.email}
-                      onChange={(e) => setLoginData({ ...loginData, email: e.target.value })}
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="login-password">Mot de passe</Label>
-                    <Input
-                      id="login-password"
-                      type="password"
-                      placeholder="••••••••"
-                      value={loginData.password}
-                      onChange={(e) => setLoginData({ ...loginData, password: e.target.value })}
-                    />
-                  </div>
-                  <Button
-                    type="submit"
-                    className="w-full"
-                    disabled={isLoginLoading}
-                  >
-                    {isLoginLoading ? "Connexion..." : "Se connecter"}
-                  </Button>
-                </form>
+              <TabsContent value="login">
+                <LoginForm />
               </TabsContent>
 
               {/* Formulaire d'inscription */}
-              <TabsContent value="register" className="space-y-4">
-                <form onSubmit={handleRegister} className="space-y-4">
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <Label htmlFor="register-firstname">Prénom</Label>
-                      <Input
-                        id="register-firstname"
-                        placeholder="Prénom"
-                        value={registerData.firstName}
-                        onChange={(e) => setRegisterData({ ...registerData, firstName: e.target.value })}
-                      />
-                    </div>
-                    <div>
-                      <Label htmlFor="register-lastname">Nom</Label>
-                      <Input
-                        id="register-lastname"
-                        placeholder="Nom"
-                        value={registerData.lastName}
-                        onChange={(e) => setRegisterData({ ...registerData, lastName: e.target.value })}
-                      />
-                    </div>
-                  </div>
-                  <div>
-                    <Label htmlFor="register-email">Email</Label>
-                    <Input
-                      id="register-email"
-                      type="email"
-                      placeholder="votre@email.com"
-                      value={registerData.email}
-                      onChange={(e) => setRegisterData({ ...registerData, email: e.target.value })}
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="register-password">Mot de passe</Label>
-                    <Input
-                      id="register-password"
-                      type="password"
-                      placeholder="••••••••"
-                      value={registerData.password}
-                      onChange={(e) => setRegisterData({ ...registerData, password: e.target.value })}
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="register-role">Vous êtes</Label>
-                    <Select value={registerData.role} onValueChange={(value: "nurse" | "establishment") => setRegisterData({ ...registerData, role: value })}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Sélectionnez votre rôle" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="nurse">Infirmier(ère)</SelectItem>
-                        <SelectItem value="establishment">Établissement de santé</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  {/* Champs spécifiques aux infirmiers */}
-                  {registerData.role === "nurse" && (
-                    <div className="space-y-4 border-t pt-4">
-                      <h4 className="font-medium text-gray-900">Informations professionnelles</h4>
-                      <div className="grid grid-cols-2 gap-4">
-                        <div>
-                          <Label htmlFor="rpps-number">Numéro RPPS</Label>
-                          <Input
-                            id="rpps-number"
-                            placeholder="12345678901"
-                            value={registerData.rppsNumber}
-                            onChange={(e) => setRegisterData({ ...registerData, rppsNumber: e.target.value })}
-                          />
-                        </div>
-                        <div>
-                          <Label htmlFor="adeli-number">Numéro ADELI</Label>
-                          <Input
-                            id="adeli-number"
-                            placeholder="123456789"
-                            value={registerData.adeliNumber}
-                            onChange={(e) => setRegisterData({ ...registerData, adeliNumber: e.target.value })}
-                          />
-                        </div>
-                      </div>
-                      <div>
-                        <Label htmlFor="specialization">Spécialisation</Label>
-                        <Select value={registerData.specialization} onValueChange={(value) => setRegisterData({ ...registerData, specialization: value })}>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Sélectionnez votre spécialisation" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="general">Soins généraux</SelectItem>
-                            <SelectItem value="urgences">Urgences</SelectItem>
-                            <SelectItem value="pediatrie">Pédiatrie</SelectItem>
-                            <SelectItem value="geriatrie">Gériatrie</SelectItem>
-                            <SelectItem value="psychiatrie">Psychiatrie</SelectItem>
-                            <SelectItem value="chirurgie">Chirurgie</SelectItem>
-                            <SelectItem value="reanimation">Réanimation</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      <div>
-                        <Label htmlFor="experience">Années d'expérience</Label>
-                        <Select value={registerData.experience} onValueChange={(value) => setRegisterData({ ...registerData, experience: value })}>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Sélectionnez votre expérience" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="0-1">0-1 an</SelectItem>
-                            <SelectItem value="2-5">2-5 ans</SelectItem>
-                            <SelectItem value="6-10">6-10 ans</SelectItem>
-                            <SelectItem value="10+">Plus de 10 ans</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Champs spécifiques aux établissements */}
-                  {registerData.role === "establishment" && (
-                    <div className="space-y-4 border-t pt-4">
-                      <h4 className="font-medium text-gray-900">Informations établissement</h4>
-                      <div>
-                        <Label htmlFor="establishment-name">Nom de l'établissement</Label>
-                        <Input
-                          id="establishment-name"
-                          placeholder="CHU de Lyon"
-                          value={registerData.establishmentName}
-                          onChange={(e) => setRegisterData({ ...registerData, establishmentName: e.target.value })}
-                        />
-                      </div>
-                      <div>
-                        <Label htmlFor="establishment-type">Type d'établissement</Label>
-                        <Select value={registerData.establishmentType} onValueChange={(value) => setRegisterData({ ...registerData, establishmentType: value })}>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Sélectionnez le type" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="hospital">Hôpital public</SelectItem>
-                            <SelectItem value="clinic">Clinique privée</SelectItem>
-                            <SelectItem value="ehpad">EHPAD</SelectItem>
-                            <SelectItem value="maison_retraite">Maison de retraite</SelectItem>
-                            <SelectItem value="center_dialysis">Centre de dialyse</SelectItem>
-                            <SelectItem value="home_care">Soins à domicile</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      <div>
-                        <Label htmlFor="siret-number">Numéro SIRET</Label>
-                        <Input
-                          id="siret-number"
-                          placeholder="12345678901234"
-                          value={registerData.siretNumber}
-                          onChange={(e) => setRegisterData({ ...registerData, siretNumber: e.target.value })}
-                        />
-                      </div>
-                      <div>
-                        <Label htmlFor="address">Adresse</Label>
-                        <Input
-                          id="address"
-                          placeholder="123 Rue de la Santé, 69000 Lyon"
-                          value={registerData.address}
-                          onChange={(e) => setRegisterData({ ...registerData, address: e.target.value })}
-                        />
-                      </div>
-                      <div>
-                        <Label htmlFor="contact-phone">Téléphone de contact</Label>
-                        <Input
-                          id="contact-phone"
-                          placeholder="04 12 34 56 78"
-                          value={registerData.contactPhone}
-                          onChange={(e) => setRegisterData({ ...registerData, contactPhone: e.target.value })}
-                        />
-                      </div>
-                    </div>
-                  )}
-
-                  <Button
-                    type="submit"
-                    className="w-full"
-                    disabled={isRegisterLoading}
-                  >
-                    {isRegisterLoading ? "Inscription..." : "S'inscrire"}
-                  </Button>
-                </form>
+              <TabsContent value="register">
+                <RegisterForm />
               </TabsContent>
             </Tabs>
           </CardContent>
