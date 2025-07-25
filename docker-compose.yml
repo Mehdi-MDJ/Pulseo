@@ -1,3 +1,7 @@
+# ===============================================================
+# FICHIER DE DÉVELOPPEMENT LOCAL UNIQUEMENT
+# NE PAS utiliser ce fichier pour la production.
+# ===============================================================
 version: '3.8'
 
 services:
