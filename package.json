@@ -22,6 +22,7 @@
   "description": "Plateforme intelligente pour les soins infirmiers",
   "type": "module",
   "dependencies": {
+    "@hookform/resolvers": "^5.2.0",
     "@radix-ui/react-accordion": "^1.2.11",
     "@radix-ui/react-alert-dialog": "^1.1.14",
     "@radix-ui/react-aspect-ratio": "^1.1.7",
@@ -72,7 +73,9 @@
     "react-helmet-async": "^2.0.5",
     "react-hook-form": "^7.60.0",
     "react-router-dom": "^7.7.0",
-    "wouter": "^3.7.1"
+    "tailwind-merge": "^3.3.1",
+    "wouter": "^3.7.1",
+    "zod": "^3.25.76"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.1.11",
