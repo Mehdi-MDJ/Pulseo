@@ -83,6 +83,33 @@ app.get("/api/test", (req, res) => {
   })
 })
 
+// Route d'inscription
+app.post("/api/auth/signup", (req, res) => {
+  const { email, password, firstName, lastName, role } = req.body
+
+  if (!email || !password || !firstName || !lastName || !role) {
+    return res.status(400).json({
+      error: "Tous les champs sont requis",
+      code: "MISSING_FIELDS"
+    })
+  }
+
+  // Simulation d'inscription réussie
+  res.status(201).json({
+    user: {
+      id: Date.now().toString(),
+      email,
+      firstName,
+      lastName,
+      role: role.toUpperCase(),
+      name: `${firstName} ${lastName}`
+    },
+    token: "fake-jwt-token-" + Date.now(),
+    expires: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+    message: "Inscription réussie"
+  })
+})
+
 // Route d'authentification simple
 app.post("/api/auth/signin", (req, res) => {
   const { email, password } = req.body
@@ -112,6 +139,13 @@ app.post("/api/auth/signin", (req, res) => {
       code: "INVALID_CREDENTIALS"
     })
   }
+})
+
+// Route de déconnexion
+app.post("/api/auth/signout", (req, res) => {
+  res.json({
+    message: "Déconnexion réussie"
+  })
 })
 
 // Route de session
