@@ -1,32 +1,23 @@
-import * as schema from "../shared/schema.js";
+import { drizzle } from 'drizzle-orm/libsql';
+import { createClient } from '@libsql/client';
+import 'dotenv/config';
 
-const dbUrl = process.env.DATABASE_URL;
+// Récupère l'URL de la base de données depuis les variables d'environnement
+const databaseUrl = process.env.DATABASE_URL;
 
-if (!dbUrl) {
-  throw new Error("DATABASE_URL must be set. Did you forget to provision a database?");
+if (!databaseUrl) {
+  throw new Error("La variable d'environnement DATABASE_URL est manquante.");
 }
 
-// Pour le développement, on utilise uniquement SQLite
-// En production, on peut ajouter PostgreSQL si nécessaire
-let db: any = undefined;
+// Crée le client de base de données avec la nouvelle librairie
+const client = createClient({
+  url: databaseUrl,
+});
 
-async function initDb() {
-  // On sait que dbUrl est défini grâce à la vérification ci-dessus
-  const databaseUrl = dbUrl!;
+// Exporte la connexion Drizzle, prête à l'emploi dans toute l'application
+export const db = drizzle(client);
 
-  if (databaseUrl.startsWith("file:")) {
-    const Database = (await import("better-sqlite3")).default;
-    const { drizzle } = await import("drizzle-orm/better-sqlite3");
-    const sqlite = new Database(databaseUrl.replace("file:", ""));
-    db = drizzle(sqlite, { schema });
-    return db;
-  } else {
-    throw new Error("En développement, DATABASE_URL doit commencer par 'file:' pour utiliser SQLite");
-  }
-}
-
-export const dbReady = initDb();
-export async function getDb() {
-  if (db) return db;
-  return dbReady;
-}
+// Fonction pour obtenir la connexion (compatibilité avec le code existant)
+export const getDb = async () => {
+  return db;
+};
