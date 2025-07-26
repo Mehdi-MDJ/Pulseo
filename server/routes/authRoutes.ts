@@ -10,6 +10,9 @@
 
 import { Router } from "express"
 import { authService } from "../lib/simple-auth"
+import { getDb } from "../db"
+import { users, nurseProfiles, establishmentProfiles } from "@shared/schema"
+import { eq } from "drizzle-orm"
 
 const router = Router()
 
@@ -82,10 +85,10 @@ router.get("/user", async (req, res) => {
     }
 
     // Récupérer les informations complètes de l'utilisateur
-    const { prisma } = await import("../lib/prisma")
-    const user = await prisma.user.findUnique({
-      where: { id: session.user.id },
-      include: {
+    const db = await getDb()
+    const user = await db.query.users.findFirst({
+      where: eq(users.id, session.user.id),
+      with: {
         nurseProfile: true,
         establishmentProfile: true,
       }
@@ -129,15 +132,33 @@ router.put("/user", async (req, res) => {
     }
 
     const { name, role } = req.body
-    const { prisma } = await import("../lib/prisma")
+    const db = await getDb()
 
-    const updatedUser = await prisma.user.update({
-      where: { id: session.user.id },
-      data: { name, role },
-      include: {
-        nurseProfile: true,
-        establishmentProfile: true,
-      }
+    const updatedUser = await db.update(users)
+      .set({
+        firstName: name?.split(' ')[0] || undefined,
+        lastName: name?.split(' ').slice(1).join(' ') || undefined,
+        role: role,
+        updatedAt: new Date()
+      })
+      .where(eq(users.id, session.user.id))
+      .returning()
+      .then(users => users[0])
+
+    if (!updatedUser) {
+      return res.status(404).json({
+        error: "Utilisateur non trouvé",
+        code: "USER_NOT_FOUND"
+      })
+    }
+
+    // Récupérer les profils associés
+    const nurseProfile = await db.query.nurseProfiles.findFirst({
+      where: eq(nurseProfiles.userId, updatedUser.id)
+    })
+
+    const establishmentProfile = await db.query.establishmentProfiles.findFirst({
+      where: eq(establishmentProfiles.userId, updatedUser.id)
     })
 
     res.json({
@@ -171,18 +192,18 @@ router.post("/nurse-profile", async (req, res) => {
     }
 
     const { specializations, experience, certifications, availability, hourlyRate } = req.body
-    const { prisma } = await import("../lib/prisma")
+    const db = await getDb()
 
-    const nurseProfile = await prisma.nurseProfile.create({
-      data: {
-        userId: session.user.id,
-        specializations: specializations || [],
-        experience: experience || 0,
-        certifications: certifications || [],
-        availability: availability || null,
-        hourlyRate: hourlyRate || null,
-      }
-    })
+    const nurseProfile = await db.insert(nurseProfiles).values({
+      userId: session.user.id,
+      specializations: JSON.stringify(specializations || []),
+      experience: experience || 0,
+      certifications: JSON.stringify(certifications || []),
+      availability: availability ? JSON.stringify(availability) : null,
+      hourlyRateMin: hourlyRate || null,
+      createdAt: new Date(),
+      updatedAt: new Date()
+    }).returning().then(profiles => profiles[0])
 
     res.json(nurseProfile)
   } catch (error) {
@@ -207,20 +228,20 @@ router.post("/establishment-profile", async (req, res) => {
     }
 
     const { name, type, address, phone, specialties, capacity, description } = req.body
-    const { prisma } = await import("../lib/prisma")
+    const db = await getDb()
 
-    const establishmentProfile = await prisma.establishmentProfile.create({
-      data: {
-        userId: session.user.id,
-        name,
-        type,
-        address,
-        phone,
-        specialties: specialties || [],
-        capacity,
-        description,
-      }
-    })
+    const establishmentProfile = await db.insert(establishmentProfiles).values({
+      userId: session.user.id,
+      name,
+      type,
+      address,
+      phone,
+      specialties: JSON.stringify(specialties || []),
+      capacity,
+      description,
+      createdAt: new Date(),
+      updatedAt: new Date()
+    }).returning().then(profiles => profiles[0])
 
     res.json(establishmentProfile)
   } catch (error) {

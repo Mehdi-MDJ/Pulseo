@@ -340,9 +340,6 @@ importers:
 
   server:
     dependencies:
-      '@prisma/client':
-        specifier: ^6.11.1
-        version: 6.12.0(prisma@6.12.0(typescript@5.8.3))(typescript@5.8.3)
       '@types/bcryptjs':
         specifier: ^2.4.6
         version: 2.4.6
@@ -388,9 +385,6 @@ importers:
       pdfkit:
         specifier: ^0.17.1
         version: 0.17.1
-      prisma:
-        specifier: ^6.11.1
-        version: 6.12.0(typescript@5.8.3)
       zod:
         specifier: ^3.25.67
         version: 3.25.76
@@ -8573,14 +8567,18 @@ snapshots:
     optionalDependencies:
       prisma: 6.12.0(typescript@5.8.3)
       typescript: 5.8.3
+    optional: true
 
   '@prisma/config@6.12.0':
     dependencies:
       jiti: 2.4.2
+    optional: true
 
-  '@prisma/debug@6.12.0': {}
+  '@prisma/debug@6.12.0':
+    optional: true
 
-  '@prisma/engines-version@6.12.0-15.8047c96bbd92db98a2abc7c9323ce77c02c89dbc': {}
+  '@prisma/engines-version@6.12.0-15.8047c96bbd92db98a2abc7c9323ce77c02c89dbc':
+    optional: true
 
   '@prisma/engines@6.12.0':
     dependencies:
@@ -8588,16 +8586,19 @@ snapshots:
       '@prisma/engines-version': 6.12.0-15.8047c96bbd92db98a2abc7c9323ce77c02c89dbc
       '@prisma/fetch-engine': 6.12.0
       '@prisma/get-platform': 6.12.0
+    optional: true
 
   '@prisma/fetch-engine@6.12.0':
     dependencies:
       '@prisma/debug': 6.12.0
       '@prisma/engines-version': 6.12.0-15.8047c96bbd92db98a2abc7c9323ce77c02c89dbc
       '@prisma/get-platform': 6.12.0
+    optional: true
 
   '@prisma/get-platform@6.12.0':
     dependencies:
       '@prisma/debug': 6.12.0
+    optional: true
 
   '@radix-ui/number@1.1.1': {}
 
@@ -12070,7 +12071,8 @@ snapshots:
 
   jiti@1.21.7: {}
 
-  jiti@2.4.2: {}
+  jiti@2.4.2:
+    optional: true
 
   joi@17.13.3:
     dependencies:
@@ -13228,6 +13230,7 @@ snapshots:
       '@prisma/engines': 6.12.0
     optionalDependencies:
       typescript: 5.8.3
+    optional: true
 
   proc-log@4.2.0: {}
 

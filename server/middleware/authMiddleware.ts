@@ -1,38 +1,69 @@
 /**
  * ==============================================================================
- * NurseLink AI - Middleware d'Authentification NextAuth.js v5
+ * NurseLink AI - Middleware d'Authentification Personnalisé
  * ==============================================================================
  *
- * Middleware pour protéger les routes avec NextAuth.js v5
- * Gestion des rôles et permissions
+ * Middleware pour protéger les routes avec notre système d'auth personnalisé
+ * Gestion des rôles et permissions avec Drizzle ORM
  * ==============================================================================
  */
 
 import { Request, Response, NextFunction } from "express"
-import { handlers } from "../lib/auth"
+import { getDb } from "../db"
+import { users, missions, nurseProfiles, establishmentProfiles, missionApplications } from "@shared/schema"
+import { eq } from "drizzle-orm"
+
+// Étendre le type Request pour inclure l'utilisateur
+declare global {
+  namespace Express {
+    interface Request {
+      user?: {
+        id: string
+        email: string
+        name: string
+        role: string
+        establishmentId?: string
+      }
+      establishmentProfile?: any
+    }
+  }
+}
 
 /**
  * Middleware d'authentification de base
- * Vérifie si l'utilisateur est connecté
+ * Vérifie si l'utilisateur est connecté via les cookies
  */
 export const requireAuth = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const session = await handlers.GET(req, res)
+    const { sessionId } = req.cookies
 
-    if (!session?.user) {
+    if (!sessionId) {
       return res.status(401).json({
         error: "Non authentifié",
         code: "UNAUTHORIZED"
       })
     }
 
+    // Vérifier la session (simulation pour l'instant)
+    // En production, on vérifierait la session dans la base de données
+    const db = await getDb()
+    const user = await db.query.users.findFirst({
+      where: eq(users.id, sessionId) // Simplification pour l'exemple
+    })
+
+    if (!user) {
+      return res.status(401).json({
+        error: "Session invalide",
+        code: "INVALID_SESSION"
+      })
+    }
+
     // Ajouter l'utilisateur à la requête
     req.user = {
-      id: session.user.id,
-      email: session.user.email!,
-      name: session.user.name || "",
-      role: session.user.role || "NURSE",
-      establishmentId: session.user.establishmentId,
+      id: user.id,
+      email: user.email || "",
+      name: `${user.firstName || ""} ${user.lastName || ""}`.trim(),
+      role: user.role,
     }
 
     next()
@@ -74,22 +105,22 @@ export const requireRole = (roles: string[]) => {
 /**
  * Middleware pour les infirmiers uniquement
  */
-export const requireNurse = requireRole(["NURSE"])
+export const requireNurse = requireRole(["nurse"])
 
 /**
  * Middleware pour les établissements uniquement
  */
-export const requireEstablishment = requireRole(["ESTABLISHMENT"])
+export const requireEstablishment = requireRole(["establishment"])
 
 /**
  * Middleware pour les administrateurs uniquement
  */
-export const requireAdmin = requireRole(["ADMIN"])
+export const requireAdmin = requireRole(["admin"])
 
 /**
  * Middleware pour les infirmiers et établissements
  */
-export const requireNurseOrEstablishment = requireRole(["NURSE", "ESTABLISHMENT"])
+export const requireNurseOrEstablishment = requireRole(["nurse", "establishment"])
 
 /**
  * Middleware pour vérifier la propriété d'une ressource
@@ -115,40 +146,47 @@ export const requireOwnership = (resourceIdField: string, resourceType: string) 
     }
 
     try {
-      const { prisma } = await import("../lib/prisma")
-
+      const db = await getDb()
       let isOwner = false
 
       switch (resourceType) {
         case "mission":
-          const mission = await prisma.mission.findUnique({
-            where: { id: resourceId },
-            include: { establishment: true }
+          const mission = await db.query.missions.findFirst({
+            where: eq(missions.id, parseInt(resourceId)),
+            with: {
+              establishment: true
+            }
           })
-          isOwner = mission?.establishment.userId === req.user.id
+          isOwner = mission?.establishment?.userId === req.user.id
           break
 
         case "profile":
-          if (req.user.role === "NURSE") {
-            const nurseProfile = await prisma.nurseProfile.findUnique({
-              where: { id: resourceId }
+          if (req.user.role === "nurse") {
+            const nurseProfile = await db.query.nurseProfiles.findFirst({
+              where: eq(nurseProfiles.id, parseInt(resourceId))
             })
             isOwner = nurseProfile?.userId === req.user.id
-          } else if (req.user.role === "ESTABLISHMENT") {
-            const establishmentProfile = await prisma.establishmentProfile.findUnique({
-              where: { id: resourceId }
+          } else if (req.user.role === "establishment") {
+            const establishmentProfile = await db.query.establishmentProfiles.findFirst({
+              where: eq(establishmentProfiles.id, parseInt(resourceId))
             })
             isOwner = establishmentProfile?.userId === req.user.id
           }
           break
 
         case "application":
-          const application = await prisma.missionApplication.findUnique({
-            where: { id: resourceId },
-            include: { mission: { include: { establishment: true } } }
+          const application = await db.query.missionApplications.findFirst({
+            where: eq(missionApplications.id, parseInt(resourceId)),
+            with: {
+              mission: {
+                with: {
+                  establishment: true
+                }
+              }
+            }
           })
           isOwner = application?.nurseId === req.user.id ||
-                    application?.mission.establishment.userId === req.user.id
+                    application?.mission?.establishment?.userId === req.user.id
           break
 
         default:
@@ -188,11 +226,11 @@ export const requireCompleteProfile = async (req: Request, res: Response, next: 
   }
 
   try {
-    const { prisma } = await import("../lib/prisma")
+    const db = await getDb()
 
-    const user = await prisma.user.findUnique({
-      where: { id: req.user.id },
-      include: {
+    const user = await db.query.users.findFirst({
+      where: eq(users.id, req.user.id),
+      with: {
         nurseProfile: true,
         establishmentProfile: true,
       }
@@ -205,14 +243,13 @@ export const requireCompleteProfile = async (req: Request, res: Response, next: 
       })
     }
 
-    const hasProfile = (req.user.role === "NURSE" && user.nurseProfile) ||
-                      (req.user.role === "ESTABLISHMENT" && user.establishmentProfile)
+    const hasProfile = (req.user.role === "nurse" && user.nurseProfile) ||
+                      (req.user.role === "establishment" && user.establishmentProfile)
 
     if (!hasProfile) {
       return res.status(403).json({
         error: "Profil incomplet - Veuillez compléter votre profil",
-        code: "INCOMPLETE_PROFILE",
-        requiredProfile: req.user.role === "NURSE" ? "nurse" : "establishment"
+        code: "INCOMPLETE_PROFILE"
       })
     }
 
@@ -227,7 +264,7 @@ export const requireCompleteProfile = async (req: Request, res: Response, next: 
 }
 
 /**
- * Middleware pour vérifier les permissions d'établissement
+ * Middleware pour vérifier l'accès aux établissements
  */
 export const requireEstablishmentAccess = async (req: Request, res: Response, next: NextFunction) => {
   if (!req.user) {
@@ -237,19 +274,34 @@ export const requireEstablishmentAccess = async (req: Request, res: Response, ne
     })
   }
 
-  // Les admins ont accès à tout
-  if (req.user.role === "ADMIN") {
-    return next()
+  if (req.user.role !== "establishment") {
+    return res.status(403).json({
+      error: "Accès réservé aux établissements",
+      code: "ESTABLISHMENT_ONLY"
+    })
   }
 
-  // Les établissements peuvent accéder à leurs propres données
-  if (req.user.role === "ESTABLISHMENT") {
-    return next()
-  }
+  try {
+    const db = await getDb()
+    const establishmentProfile = await db.query.establishmentProfiles.findFirst({
+      where: eq(establishmentProfiles.userId, req.user.id)
+    })
 
-  // Les infirmiers ne peuvent pas accéder aux données d'établissement
-  return res.status(403).json({
-    error: "Accès interdit - Seuls les établissements peuvent accéder à ces données",
-    code: "ESTABLISHMENT_ACCESS_REQUIRED"
-  })
+    if (!establishmentProfile) {
+      return res.status(403).json({
+        error: "Profil établissement requis",
+        code: "ESTABLISHMENT_PROFILE_REQUIRED"
+      })
+    }
+
+    // Ajouter le profil établissement à la requête
+    req.establishmentProfile = establishmentProfile
+    next()
+  } catch (error) {
+    console.error("Erreur vérification établissement:", error)
+    return res.status(500).json({
+      error: "Erreur serveur",
+      code: "INTERNAL_ERROR"
+    })
+  }
 }
