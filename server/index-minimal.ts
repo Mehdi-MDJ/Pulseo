@@ -14,8 +14,16 @@ import helmet from "helmet"
 import rateLimit from "express-rate-limit"
 import compression from "compression"
 import { json, urlencoded } from "body-parser"
+import cookieParser from "cookie-parser"
 
 const app = express()
+
+// ==============================================================================
+// Gestion des sessions (simplifiée)
+// ==============================================================================
+
+// Stockage des sessions en mémoire (à remplacer par une DB en production)
+const sessions = new Map<string, any>()
 
 // ==============================================================================
 // Configuration de sécurité
@@ -61,6 +69,9 @@ app.use(compression())
 app.use(json({ limit: "10mb" }))
 app.use(urlencoded({ extended: true, limit: "10mb" }))
 
+// Cookie parsing
+app.use(cookieParser())
+
 // ==============================================================================
 // Routes de base
 // ==============================================================================
@@ -95,15 +106,28 @@ app.post("/api/auth/signup", (req, res) => {
   }
 
   // Simulation d'inscription réussie
+  const sessionId = Date.now().toString()
+  const user = {
+    id: Date.now().toString(),
+    email,
+    firstName,
+    lastName,
+    role: role.toUpperCase(),
+    name: `${firstName} ${lastName}`
+  }
+
+  // Stocker la session
+  sessions.set(sessionId, { user, createdAt: new Date() })
+
+  // Créer le cookie de session
+  res.cookie('sessionId', sessionId, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    maxAge: 30 * 24 * 60 * 60 * 1000 // 30 jours
+  })
+
   res.status(201).json({
-    user: {
-      id: Date.now().toString(),
-      email,
-      firstName,
-      lastName,
-      role: role.toUpperCase(),
-      name: `${firstName} ${lastName}`
-    },
+    user,
     token: "fake-jwt-token-" + Date.now(),
     expires: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
     message: "Inscription réussie"
@@ -123,13 +147,26 @@ app.post("/api/auth/signin", (req, res) => {
 
   // Simulation d'authentification
   if (email === "test@example.com" && password === "password") {
+    const sessionId = Date.now().toString()
+    const user = {
+      id: "1",
+      email: "test@example.com",
+      role: "NURSE",
+      name: "Test User"
+    }
+
+    // Stocker la session
+    sessions.set(sessionId, { user, createdAt: new Date() })
+
+    // Créer le cookie de session
+    res.cookie('sessionId', sessionId, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      maxAge: 30 * 24 * 60 * 60 * 1000 // 30 jours
+    })
+
     res.json({
-      user: {
-        id: "1",
-        email: "test@example.com",
-        role: "NURSE",
-        name: "Test User"
-      },
+      user,
       token: "fake-jwt-token",
       expires: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
     })
@@ -143,6 +180,16 @@ app.post("/api/auth/signin", (req, res) => {
 
 // Route de déconnexion
 app.post("/api/auth/signout", (req, res) => {
+  const { sessionId } = req.cookies
+
+  if (sessionId) {
+    // Supprimer la session
+    sessions.delete(sessionId)
+  }
+
+  // Supprimer le cookie
+  res.clearCookie('sessionId')
+
   res.json({
     message: "Déconnexion réussie"
   })
@@ -150,23 +197,26 @@ app.post("/api/auth/signout", (req, res) => {
 
 // Route de session
 app.get("/api/auth/session", (req, res) => {
-  const authHeader = req.headers.authorization
+  const { sessionId } = req.cookies
 
-  if (!authHeader || !authHeader.startsWith("Bearer ")) {
+  if (!sessionId) {
     return res.status(401).json({
-      error: "Token manquant",
-      code: "MISSING_TOKEN"
+      error: "Session non trouvée",
+      code: "NO_SESSION"
     })
   }
 
-  // Simulation de vérification de session
+  const session = sessions.get(sessionId)
+
+  if (!session) {
+    return res.status(401).json({
+      error: "Session invalide",
+      code: "INVALID_SESSION"
+    })
+  }
+
   res.json({
-    user: {
-      id: "1",
-      email: "test@example.com",
-      role: "NURSE",
-      name: "Test User"
-    },
+    user: session.user,
     expires: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
   })
 })
