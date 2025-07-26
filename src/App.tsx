@@ -4,7 +4,7 @@ import { useAuth } from '@/hooks/useAuth';
 
 // --- Importation des composants ---
 import AuthPage from '@/pages/auth-page';
-import DashboardLayout from '@/components/ui/sidebar'; // Le layout principal avec la sidebar
+import { DashboardLayout } from '@/components/ui/sidebar'; // Import de l'export nommé
 import DashboardPage from '@/pages/dashboard';
 import HomePage from '@/pages/home';
 import NotFound from '@/pages/not-found';
