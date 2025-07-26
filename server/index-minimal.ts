@@ -1,20 +1,23 @@
 /**
  * ==============================================================================
- * NurseLink AI - Serveur Minimal (Version Simplifiée)
+ * NurseLink AI - Serveur Minimal (Version ESM)
  * ==============================================================================
  *
  * Serveur Express minimal pour tester l'API
- * Version simplifiée sans imports problématiques
+ * Configuration ESM native avec Drizzle ORM et JWT
  * ==============================================================================
  */
 
+import 'dotenv/config'
 import express from "express"
 import cors from "cors"
 import helmet from "helmet"
 import rateLimit from "express-rate-limit"
 import compression from "compression"
-import { json, urlencoded } from "body-parser"
 import cookieParser from "cookie-parser"
+import { getDb } from "./db.js"
+import { users, missions, notifications } from "../shared/schema.js"
+import { eq, and, desc } from "drizzle-orm"
 import bcrypt from "bcryptjs"
 import jwt from "jsonwebtoken"
 
@@ -26,19 +29,6 @@ const app = express()
 
 // JWT Secret (à configurer via variable d'environnement en production)
 const JWT_SECRET = process.env.JWT_SECRET || 'fallback-secret'
-
-// ==============================================================================
-// Données en mémoire (temporaire)
-// ==============================================================================
-
-// Stockage des utilisateurs en mémoire (à remplacer par une DB)
-const users = new Map<string, any>()
-
-// Stockage des missions en mémoire (à remplacer par une DB)
-const missions = new Map<string, any>()
-
-// Stockage des notifications en mémoire (à remplacer par une DB)
-const notifications = new Map<string, any>()
 
 // ==============================================================================
 // Configuration de sécurité
@@ -80,9 +70,9 @@ app.use(limiter)
 // Compression
 app.use(compression())
 
-// Body parsing
-app.use(json({ limit: "10mb" }))
-app.use(urlencoded({ extended: true, limit: "10mb" }))
+// Body parsing (Express 4.16+)
+app.use(express.json({ limit: "10mb" }))
+app.use(express.urlencoded({ extended: true, limit: "10mb" }))
 
 // Cookie parsing
 app.use(cookieParser())
@@ -125,8 +115,14 @@ app.post("/api/auth/signup", async (req, res) => {
       })
     }
 
+    const db = await getDb()
+
     // Vérifier si l'utilisateur existe déjà
-    if (users.has(email)) {
+    const existingUser = await db.query.users.findFirst({
+      where: eq(users.email, email)
+    })
+
+    if (existingUser) {
       return res.status(409).json({
         error: "Un utilisateur avec cet email existe déjà",
         code: "USER_ALREADY_EXISTS"
@@ -137,19 +133,18 @@ app.post("/api/auth/signup", async (req, res) => {
     const hashedPassword = await bcrypt.hash(password, 12)
 
     // Créer l'utilisateur
-    const newUser = {
+    const newUser = await db.insert(users).values({
       id: Date.now().toString(),
       email,
       firstName,
       lastName,
       passwordHash: hashedPassword,
       role: role.toLowerCase(),
+      cguAccepted: true,
+      cguAcceptedAt: new Date(),
       createdAt: new Date(),
       updatedAt: new Date()
-    }
-
-    // Stocker l'utilisateur
-    users.set(email, newUser)
+    }).returning().then((users: any[]) => users[0])
 
     // Générer un JWT
     const token = jwt.sign(
@@ -199,8 +194,12 @@ app.post("/api/auth/signin", async (req, res) => {
       })
     }
 
+    const db = await getDb()
+
     // Rechercher l'utilisateur
-    const user = users.get(email)
+    const user = await db.query.users.findFirst({
+      where: eq(users.email, email)
+    })
 
     if (!user) {
       return res.status(401).json({
@@ -210,7 +209,7 @@ app.post("/api/auth/signin", async (req, res) => {
     }
 
     // Vérifier le mot de passe
-    const isPasswordValid = await bcrypt.compare(password, user.passwordHash)
+    const isPasswordValid = await bcrypt.compare(password, user.passwordHash || '')
 
     if (!isPasswordValid) {
       return res.status(401).json({
@@ -266,7 +265,7 @@ app.post("/api/auth/signout", (req, res) => {
 })
 
 // Route de session
-app.get("/api/auth/session", (req, res) => {
+app.get("/api/auth/session", async (req, res) => {
   try {
     const { sessionId } = req.cookies
 
@@ -287,8 +286,12 @@ app.get("/api/auth/session", (req, res) => {
       })
     }
 
-    // Récupérer l'utilisateur depuis la mémoire
-    const user = Array.from(users.values()).find(u => u.id === decoded.userId)
+    const db = await getDb()
+
+    // Récupérer l'utilisateur depuis la base de données
+    const user = await db.query.users.findFirst({
+      where: eq(users.id, decoded.userId)
+    })
 
     if (!user) {
       return res.status(401).json({
@@ -322,9 +325,13 @@ app.get("/api/auth/session", (req, res) => {
 // ==============================================================================
 
 // Récupérer les missions
-app.get("/api/missions", (req, res) => {
+app.get("/api/missions", async (req, res) => {
   try {
-    const allMissions = Array.from(missions.values())
+    const db = await getDb()
+
+    const allMissions = await db.query.missions.findMany({
+      orderBy: [desc(missions.createdAt)]
+    })
 
     res.json({
       missions: allMissions,
@@ -340,7 +347,7 @@ app.get("/api/missions", (req, res) => {
 })
 
 // Créer une mission
-app.post("/api/missions", (req, res) => {
+app.post("/api/missions", async (req, res) => {
   try {
     const { title, description, location, hourlyRate, specialization, startDate, endDate } = req.body
 
@@ -351,8 +358,9 @@ app.post("/api/missions", (req, res) => {
       })
     }
 
-    const newMission = {
-      id: Date.now().toString(),
+    const db = await getDb()
+
+    const newMission = await db.insert(missions).values({
       title,
       description,
       specialization,
@@ -364,10 +372,7 @@ app.post("/api/missions", (req, res) => {
       status: "published",
       createdAt: new Date(),
       updatedAt: new Date()
-    }
-
-    // Stocker la mission
-    missions.set(newMission.id, newMission)
+    }).returning().then((missions: any[]) => missions[0])
 
     res.status(201).json({
       message: "Mission créée avec succès",
@@ -386,9 +391,13 @@ app.post("/api/missions", (req, res) => {
 // Routes des notifications
 // ==============================================================================
 
-app.get("/api/notifications", (req, res) => {
+app.get("/api/notifications", async (req, res) => {
   try {
-    const allNotifications = Array.from(notifications.values())
+    const db = await getDb()
+
+    const allNotifications = await db.query.notifications.findMany({
+      orderBy: [desc(notifications.createdAt)]
+    })
 
     res.json({
       notifications: allNotifications,
