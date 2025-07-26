@@ -1,72 +1,69 @@
 import React from 'react';
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, Outlet } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 
-// Importation des pages nécessaires
+// --- Importation des composants ---
 import AuthPage from '@/pages/auth-page';
+import DashboardLayout from '@/components/ui/sidebar'; // Le layout principal avec la sidebar
 import DashboardPage from '@/pages/dashboard';
 import HomePage from '@/pages/home';
 import NotFound from '@/pages/not-found';
 
 /**
  * Composant de Route Protégée
- * Ce composant gère l'accès aux routes qui nécessitent une authentification.
+ * Gère l'accès aux routes nécessitant une authentification.
  */
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
-  const { user, isLoading } = useAuth();
+  const { user, isLoading } = useAuth(); // Utilise isLoading comme corrigé précédemment
 
-  // Étape 1 : Gérer l'état de chargement.
-  // Affiche un message pendant que la session utilisateur est en cours de vérification.
-  // C'est la correction clé pour éviter les boucles de redirection.
   if (isLoading) {
-    return <div className="flex h-screen items-center justify-center">Chargement de votre session...</div>;
+    return <div className="flex h-screen items-center justify-center">Chargement...</div>;
   }
-
-  // Étape 2 : Gérer l'utilisateur non authentifié.
-  // Si le chargement est terminé et qu'il n'y a pas d'utilisateur, rediriger vers la page de connexion.
   if (!user) {
     return <Navigate to="/auth-page" replace />;
   }
-
-  // Étape 3 : Autoriser l'accès.
-  // Si le chargement est terminé et que l'utilisateur existe, afficher la page demandée.
   return <>{children}</>;
 };
 
 /**
- * Composant principal de l'application qui définit toute la logique de routage.
+ * Composant de Layout Principal
+ * Ce composant est la clé : il affiche le layout commun (avec la sidebar)
+ * et injecte les pages enfants (Dashboard, Settings, etc.) via le composant <Outlet />.
+ */
+const AppLayout = () => (
+  <DashboardLayout>
+    <Outlet />
+  </DashboardLayout>
+);
+
+/**
+ * Composant principal de l'application
  */
 function App() {
   return (
     <BrowserRouter>
       <Routes>
-        {/* Route publique pour la connexion et l'inscription */}
+        {/* Route publique */}
         <Route path="/auth-page" element={<AuthPage />} />
 
-        {/* Route par défaut - redirige vers home ou dashboard selon l'utilisateur */}
+        {/* Routes privées qui partagent toutes le même layout */}
         <Route
           path="/"
           element={
             <ProtectedRoute>
-              <HomePage />
+              <AppLayout />
             </ProtectedRoute>
           }
-        />
+        >
+          {/* Route "index" -> ce qui s'affiche pour "/" */}
+          <Route index element={<HomePage />} />
 
-        {/* Route du dashboard */}
-        <Route
-          path="/dashboard"
-          element={
-            <ProtectedRoute>
-              <DashboardPage />
-            </ProtectedRoute>
-          }
-        />
+          {/* Autres routes enfants qui s'afficheront à l'intérieur du layout */}
+          <Route path="dashboard" element={<DashboardPage />} />
+          {/* Exemple pour le futur : <Route path="settings" element={<SettingsPage />} /> */}
+        </Route>
 
-        {/* === AJOUTEZ VOS AUTRES ROUTES PROTÉGÉES ICI === */}
-        {/* Exemple : <Route path="/settings" element={<ProtectedRoute><SettingsPage /></ProtectedRoute>} /> */}
-
-        {/* Route "catch-all" pour les pages non trouvées */}
+        {/* Route pour les pages non trouvées */}
         <Route path="*" element={<NotFound />} />
       </Routes>
     </BrowserRouter>
