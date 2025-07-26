@@ -132,9 +132,8 @@ app.post("/api/auth/signup", async (req, res) => {
     // Hasher le mot de passe
     const hashedPassword = await bcrypt.hash(password, 12)
 
-    // Créer l'utilisateur
+    // Créer l'utilisateur (l'ID sera généré automatiquement par cuid2)
     const newUser = await db.insert(users).values({
-      id: Date.now().toString(),
       email,
       firstName,
       lastName,

@@ -36,6 +36,7 @@ import {
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 import { relations } from "drizzle-orm";
+import { createId } from '@paralleldrive/cuid2';
 
 /**
  * ==============================================================================
@@ -92,8 +93,8 @@ export const notifications = sqliteTable("notifications", {
  * IMPORTANT: Cette table est obligatoire pour Replit Auth
  */
 export const users = sqliteTable("users", {
-  // Identifiant unique (peut être fourni par OAuth ou généré localement)
-  id: text("id").primaryKey().notNull(),
+  // Identifiant unique généré automatiquement avec cuid2
+  id: text("id").$defaultFn(() => createId()).primaryKey(),
 
   // Informations personnelles (RGPD sensible)
   email: text("email").unique(),
