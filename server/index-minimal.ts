@@ -1,10 +1,10 @@
 /**
  * ==============================================================================
- * NurseLink AI - Serveur Minimal
+ * NurseLink AI - Serveur Minimal (Version Simplifiée)
  * ==============================================================================
  *
  * Serveur Express minimal pour tester l'API
- * Sans les problèmes de types complexes
+ * Version simplifiée sans imports problématiques
  * ==============================================================================
  */
 
@@ -15,15 +15,30 @@ import rateLimit from "express-rate-limit"
 import compression from "compression"
 import { json, urlencoded } from "body-parser"
 import cookieParser from "cookie-parser"
+import bcrypt from "bcryptjs"
+import jwt from "jsonwebtoken"
 
 const app = express()
 
 // ==============================================================================
-// Gestion des sessions (simplifiée)
+// Configuration JWT
 // ==============================================================================
 
-// Stockage des sessions en mémoire (à remplacer par une DB en production)
-const sessions = new Map<string, any>()
+// JWT Secret (à configurer via variable d'environnement en production)
+const JWT_SECRET = process.env.JWT_SECRET || 'fallback-secret'
+
+// ==============================================================================
+// Données en mémoire (temporaire)
+// ==============================================================================
+
+// Stockage des utilisateurs en mémoire (à remplacer par une DB)
+const users = new Map<string, any>()
+
+// Stockage des missions en mémoire (à remplacer par une DB)
+const missions = new Map<string, any>()
+
+// Stockage des notifications en mémoire (à remplacer par une DB)
+const notifications = new Map<string, any>()
 
 // ==============================================================================
 // Configuration de sécurité
@@ -94,100 +109,155 @@ app.get("/api/test", (req, res) => {
   })
 })
 
+// ==============================================================================
+// Routes d'authentification
+// ==============================================================================
+
 // Route d'inscription
-app.post("/api/auth/signup", (req, res) => {
-  const { email, password, firstName, lastName, role } = req.body
+app.post("/api/auth/signup", async (req, res) => {
+  try {
+    const { email, password, firstName, lastName, role } = req.body
 
-  if (!email || !password || !firstName || !lastName || !role) {
-    return res.status(400).json({
-      error: "Tous les champs sont requis",
-      code: "MISSING_FIELDS"
-    })
-  }
-
-  // Simulation d'inscription réussie
-  const sessionId = Date.now().toString()
-  const user = {
-    id: Date.now().toString(),
-    email,
-    firstName,
-    lastName,
-    role: role.toUpperCase(),
-    name: `${firstName} ${lastName}`
-  }
-
-  // Stocker la session
-  sessions.set(sessionId, { user, createdAt: new Date() })
-
-  // Créer le cookie de session
-  res.cookie('sessionId', sessionId, {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    maxAge: 30 * 24 * 60 * 60 * 1000 // 30 jours
-  })
-
-  res.status(201).json({
-    user,
-    token: "fake-jwt-token-" + Date.now(),
-    expires: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
-    message: "Inscription réussie"
-  })
-})
-
-// Route d'authentification simple
-app.post("/api/auth/signin", (req, res) => {
-  const { email, password } = req.body
-
-  if (!email || !password) {
-    return res.status(400).json({
-      error: "Email et mot de passe requis",
-      code: "MISSING_CREDENTIALS"
-    })
-  }
-
-  // Simulation d'authentification
-  if (email === "test@example.com" && password === "password") {
-    const sessionId = Date.now().toString()
-    const user = {
-      id: "1",
-      email: "test@example.com",
-      role: "NURSE",
-      name: "Test User"
+    if (!email || !password || !firstName || !lastName || !role) {
+      return res.status(400).json({
+        error: "Tous les champs sont requis",
+        code: "MISSING_FIELDS"
+      })
     }
 
-    // Stocker la session
-    sessions.set(sessionId, { user, createdAt: new Date() })
+    // Vérifier si l'utilisateur existe déjà
+    if (users.has(email)) {
+      return res.status(409).json({
+        error: "Un utilisateur avec cet email existe déjà",
+        code: "USER_ALREADY_EXISTS"
+      })
+    }
+
+    // Hasher le mot de passe
+    const hashedPassword = await bcrypt.hash(password, 12)
+
+    // Créer l'utilisateur
+    const newUser = {
+      id: Date.now().toString(),
+      email,
+      firstName,
+      lastName,
+      passwordHash: hashedPassword,
+      role: role.toLowerCase(),
+      createdAt: new Date(),
+      updatedAt: new Date()
+    }
+
+    // Stocker l'utilisateur
+    users.set(email, newUser)
+
+    // Générer un JWT
+    const token = jwt.sign(
+      { userId: newUser.id, email: newUser.email, role: newUser.role },
+      JWT_SECRET,
+      { expiresIn: '30d' }
+    )
 
     // Créer le cookie de session
-    res.cookie('sessionId', sessionId, {
+    res.cookie('sessionId', token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      maxAge: 30 * 24 * 60 * 60 * 1000 // 30 jours
+    })
+
+    res.status(201).json({
+      user: {
+        id: newUser.id,
+        email: newUser.email,
+        firstName: newUser.firstName,
+        lastName: newUser.lastName,
+        role: newUser.role,
+        name: `${newUser.firstName} ${newUser.lastName}`
+      },
+      token,
+      expires: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+      message: "Inscription réussie"
+    })
+  } catch (error) {
+    console.error("Erreur inscription:", error)
+    res.status(500).json({
+      error: "Erreur lors de l'inscription",
+      code: "INTERNAL_ERROR"
+    })
+  }
+})
+
+// Route d'authentification
+app.post("/api/auth/signin", async (req, res) => {
+  try {
+    const { email, password } = req.body
+
+    if (!email || !password) {
+      return res.status(400).json({
+        error: "Email et mot de passe requis",
+        code: "MISSING_CREDENTIALS"
+      })
+    }
+
+    // Rechercher l'utilisateur
+    const user = users.get(email)
+
+    if (!user) {
+      return res.status(401).json({
+        error: "Identifiants invalides",
+        code: "INVALID_CREDENTIALS"
+      })
+    }
+
+    // Vérifier le mot de passe
+    const isPasswordValid = await bcrypt.compare(password, user.passwordHash)
+
+    if (!isPasswordValid) {
+      return res.status(401).json({
+        error: "Identifiants invalides",
+        code: "INVALID_CREDENTIALS"
+      })
+    }
+
+    // Générer un JWT
+    const token = jwt.sign(
+      { userId: user.id, email: user.email, role: user.role },
+      JWT_SECRET,
+      { expiresIn: '30d' }
+    )
+
+    // Créer le cookie de session
+    res.cookie('sessionId', token, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       maxAge: 30 * 24 * 60 * 60 * 1000 // 30 jours
     })
 
     res.json({
-      user,
-      token: "fake-jwt-token",
+      user: {
+        id: user.id,
+        email: user.email,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        role: user.role,
+        name: `${user.firstName} ${user.lastName}`
+      },
+      token,
       expires: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
     })
-  } else {
-    res.status(401).json({
-      error: "Identifiants invalides",
-      code: "INVALID_CREDENTIALS"
+  } catch (error) {
+    console.error("Erreur connexion:", error)
+    res.status(500).json({
+      error: "Erreur lors de la connexion",
+      code: "INTERNAL_ERROR"
     })
   }
 })
 
 // Route de déconnexion
 app.post("/api/auth/signout", (req, res) => {
-  const { sessionId } = req.cookies
-
-  if (sessionId) {
-    // Supprimer la session
-    sessions.delete(sessionId)
-  }
-
-  // Supprimer le cookie
+  // En JWT, on ne stocke pas de session côté serveur
+  // Le cookie sera supprimé côté client
   res.clearCookie('sessionId')
 
   res.json({
@@ -197,122 +267,141 @@ app.post("/api/auth/signout", (req, res) => {
 
 // Route de session
 app.get("/api/auth/session", (req, res) => {
-  const { sessionId } = req.cookies
+  try {
+    const { sessionId } = req.cookies
 
-  if (!sessionId) {
-    return res.status(401).json({
-      error: "Session non trouvée",
-      code: "NO_SESSION"
+    if (!sessionId) {
+      return res.status(401).json({
+        error: "Session non trouvée",
+        code: "NO_SESSION"
+      })
+    }
+
+    // Vérifier le JWT
+    const decoded = jwt.verify(sessionId, JWT_SECRET) as any
+
+    if (!decoded || !decoded.userId) {
+      return res.status(401).json({
+        error: "Session invalide",
+        code: "INVALID_SESSION"
+      })
+    }
+
+    // Récupérer l'utilisateur depuis la mémoire
+    const user = Array.from(users.values()).find(u => u.id === decoded.userId)
+
+    if (!user) {
+      return res.status(401).json({
+        error: "Utilisateur non trouvé",
+        code: "USER_NOT_FOUND"
+      })
+    }
+
+    res.json({
+      user: {
+        id: user.id,
+        email: user.email,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        role: user.role,
+        name: `${user.firstName} ${user.lastName}`
+      },
+      expires: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
     })
-  }
-
-  const session = sessions.get(sessionId)
-
-  if (!session) {
-    return res.status(401).json({
+  } catch (error) {
+    console.error("Erreur session:", error)
+    res.status(401).json({
       error: "Session invalide",
       code: "INVALID_SESSION"
     })
   }
-
-  res.json({
-    user: session.user,
-    expires: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
-  })
 })
 
 // ==============================================================================
-// Routes des missions (simplifiées)
+// Routes des missions
 // ==============================================================================
 
 // Récupérer les missions
 app.get("/api/missions", (req, res) => {
-  const mockMissions = [
-    {
-      id: 1,
-      title: "Infirmier en soins intensifs",
-      description: "Mission en réanimation",
-      location: "Paris",
-      hourlyRate: 45,
-      status: "OPEN",
-      startDate: "2024-01-15",
-      endDate: "2024-02-15"
-    },
-    {
-      id: 2,
-      title: "Infirmier en pédiatrie",
-      description: "Mission en pédiatrie",
-      location: "Lyon",
-      hourlyRate: 40,
-      status: "OPEN",
-      startDate: "2024-01-20",
-      endDate: "2024-02-20"
-    }
-  ]
+  try {
+    const allMissions = Array.from(missions.values())
 
-  res.json({
-    missions: mockMissions,
-    total: mockMissions.length
-  })
+    res.json({
+      missions: allMissions,
+      total: allMissions.length
+    })
+  } catch (error) {
+    console.error("Erreur récupération missions:", error)
+    res.status(500).json({
+      error: "Erreur lors de la récupération des missions",
+      code: "INTERNAL_ERROR"
+    })
+  }
 })
 
 // Créer une mission
 app.post("/api/missions", (req, res) => {
-  const { title, description, location, hourlyRate } = req.body
+  try {
+    const { title, description, location, hourlyRate, specialization, startDate, endDate } = req.body
 
-  if (!title || !description || !location || !hourlyRate) {
-    return res.status(400).json({
-      error: "Données manquantes",
-      code: "MISSING_DATA"
+    if (!title || !description || !location || !hourlyRate || !specialization) {
+      return res.status(400).json({
+        error: "Données manquantes",
+        code: "MISSING_DATA"
+      })
+    }
+
+    const newMission = {
+      id: Date.now().toString(),
+      title,
+      description,
+      specialization,
+      hourlyRate: parseFloat(hourlyRate),
+      address: location,
+      city: location.split(',')[0]?.trim() || location,
+      startDate: startDate ? new Date(startDate) : new Date(),
+      endDate: endDate ? new Date(endDate) : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+      status: "published",
+      createdAt: new Date(),
+      updatedAt: new Date()
+    }
+
+    // Stocker la mission
+    missions.set(newMission.id, newMission)
+
+    res.status(201).json({
+      message: "Mission créée avec succès",
+      mission: newMission
+    })
+  } catch (error) {
+    console.error("Erreur création mission:", error)
+    res.status(500).json({
+      error: "Erreur lors de la création de la mission",
+      code: "INTERNAL_ERROR"
     })
   }
-
-  const newMission = {
-    id: Date.now(),
-    title,
-    description,
-    location,
-    hourlyRate,
-    status: "OPEN",
-    startDate: new Date().toISOString(),
-    endDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
-  }
-
-  res.status(201).json({
-    message: "Mission créée avec succès",
-    mission: newMission
-  })
 })
 
 // ==============================================================================
-// Routes des notifications (simplifiées)
+// Routes des notifications
 // ==============================================================================
 
 app.get("/api/notifications", (req, res) => {
-  const mockNotifications = [
-    {
-      id: "1",
-      type: "NEW_MISSION",
-      title: "Nouvelle mission disponible",
-      message: "Une nouvelle mission correspond à votre profil",
-      read: false,
-      createdAt: new Date().toISOString()
-    },
-    {
-      id: "2",
-      type: "APPLICATION_ACCEPTED",
-      title: "Candidature acceptée",
-      message: "Votre candidature a été acceptée",
-      read: true,
-      createdAt: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
-    }
-  ]
+  try {
+    const allNotifications = Array.from(notifications.values())
 
-  res.json({
-    notifications: mockNotifications,
-    total: mockNotifications.length,
-    unread: mockNotifications.filter(n => !n.read).length
-  })
+    res.json({
+      notifications: allNotifications,
+      total: allNotifications.length,
+      unread: allNotifications.filter((n: any) => !n.isRead).length
+    })
+  } catch (error) {
+    console.error("Erreur récupération notifications:", error)
+    res.status(500).json({
+      error: "Erreur lors de la récupération des notifications",
+      code: "INTERNAL_ERROR"
+    })
+  }
 })
 
 // ==============================================================================
