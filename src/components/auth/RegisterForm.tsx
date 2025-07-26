@@ -80,6 +80,7 @@ export function RegisterForm() {
                 value={formData.firstName}
                 onChange={(e) => handleInputChange('firstName', e.target.value)}
                 placeholder="Prénom"
+                autoComplete="given-name"
                 required
               />
             </div>
@@ -91,6 +92,7 @@ export function RegisterForm() {
                 value={formData.lastName}
                 onChange={(e) => handleInputChange('lastName', e.target.value)}
                 placeholder="Nom"
+                autoComplete="family-name"
                 required
               />
             </div>
@@ -104,24 +106,9 @@ export function RegisterForm() {
               value={formData.email}
               onChange={(e) => handleInputChange('email', e.target.value)}
               placeholder="votre@email.com"
+              autoComplete="email"
               required
             />
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="role">Type de compte</Label>
-            <Select
-              value={formData.role}
-              onValueChange={(value) => handleInputChange('role', value)}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Sélectionnez votre type de compte" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="NURSE">Infirmier(e)</SelectItem>
-                <SelectItem value="ESTABLISHMENT">Établissement</SelectItem>
-              </SelectContent>
-            </Select>
           </div>
 
           <div className="space-y-2">
@@ -132,6 +119,7 @@ export function RegisterForm() {
               value={formData.password}
               onChange={(e) => handleInputChange('password', e.target.value)}
               placeholder="••••••••"
+              autoComplete="new-password"
               required
             />
           </div>
@@ -144,8 +132,25 @@ export function RegisterForm() {
               value={formData.confirmPassword}
               onChange={(e) => handleInputChange('confirmPassword', e.target.value)}
               placeholder="••••••••"
+              autoComplete="new-password"
               required
             />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="role">Rôle</Label>
+            <Select
+              value={formData.role}
+              onValueChange={(value) => handleInputChange('role', value)}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Sélectionnez votre rôle" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="NURSE">Infirmier(e)</SelectItem>
+                <SelectItem value="ESTABLISHMENT">Établissement de santé</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
 
           <Button

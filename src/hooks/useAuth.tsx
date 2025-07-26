@@ -60,13 +60,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       });
 
       if (response.ok) {
-        const session = await response.json();
-        if (session.user) {
-          setUser(session.user);
-          console.log('[AuthProvider] Utilisateur authentifié:', session.user);
+        const contentType = response.headers.get("content-type");
+
+        // Vérifier si la réponse est du JSON
+        if (contentType && contentType.includes("application/json")) {
+          const session = await response.json();
+          if (session.user) {
+            setUser(session.user);
+            console.log('[AuthProvider] Utilisateur authentifié:', session.user);
+          } else {
+            setUser(null);
+            console.log('[AuthProvider] Aucun utilisateur authentifié');
+          }
         } else {
+          // Si ce n'est pas du JSON (probablement du HTML), le serveur backend n'est pas démarré
+          console.log('[AuthProvider] Serveur backend non disponible, utilisateur non authentifié');
           setUser(null);
-          console.log('[AuthProvider] Aucun utilisateur authentifié');
         }
       } else {
         setUser(null);
@@ -91,30 +100,32 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       });
 
       if (response.ok) {
-        const data = await response.json();
-        setUser(data.user);
-        toast({
-          title: "Connexion réussie",
-          description: `Bienvenue ${data.user.name || data.user.email} !`,
-        });
-        return { success: true };
+        const contentType = response.headers.get("content-type");
+
+        if (contentType && contentType.includes("application/json")) {
+          const data = await response.json();
+          setUser(data.user);
+          toast({
+            title: "Connexion réussie",
+            description: `Bienvenue ${data.user.name || data.user.email} !`,
+          });
+          return { success: true };
+        } else {
+          // Serveur backend non disponible
+          toast({
+            title: "Erreur de connexion",
+            description: "Le serveur backend n'est pas disponible. Veuillez le démarrer.",
+            variant: "destructive",
+          });
+          return { success: false, error: "Serveur backend non disponible" };
+        }
       } else {
         const errorData = await response.json().catch(() => ({ error: "Erreur de connexion" }));
-        toast({
-          title: "Erreur de connexion",
-          description: errorData.error || "Identifiants incorrects",
-          variant: "destructive",
-        });
         return { success: false, error: errorData.error };
       }
-    } catch (error: any) {
+    } catch (error) {
       console.error("Erreur login:", error);
-      toast({
-        title: "Erreur de connexion",
-        description: "Impossible de se connecter au serveur",
-        variant: "destructive",
-      });
-      return { success: false, error: "Erreur réseau" };
+      return { success: false, error: "Erreur de connexion" };
     } finally {
       setIsLoginLoading(false);
     }
@@ -123,29 +134,40 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const register = async (data: RegisterData) => {
     setIsRegisterLoading(true);
     try {
-      // Simuler l'inscription pour le moment
-      // TODO: Implémenter l'endpoint d'inscription
-      const mockUser = {
-        id: "user_" + Date.now(),
-        email: data.email,
-        name: `${data.firstName} ${data.lastName}`,
-        role: data.role,
-      };
+      const response = await fetch("/api/auth/signup", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+        credentials: "include",
+      });
 
-      setUser(mockUser);
-      toast({
-        title: "Inscription réussie",
-        description: `Bienvenue ${mockUser.name} !`,
-      });
-      return { success: true };
-    } catch (error: any) {
+      if (response.ok) {
+        const contentType = response.headers.get("content-type");
+
+        if (contentType && contentType.includes("application/json")) {
+          const result = await response.json();
+          setUser(result.user);
+          toast({
+            title: "Inscription réussie",
+            description: `Bienvenue ${result.user.name || result.user.email} !`,
+          });
+          return { success: true };
+        } else {
+          // Serveur backend non disponible
+          toast({
+            title: "Erreur d'inscription",
+            description: "Le serveur backend n'est pas disponible. Veuillez le démarrer.",
+            variant: "destructive",
+          });
+          return { success: false, error: "Serveur backend non disponible" };
+        }
+      } else {
+        const errorData = await response.json().catch(() => ({ error: "Erreur d'inscription" }));
+        return { success: false, error: errorData.error };
+      }
+    } catch (error) {
       console.error("Erreur register:", error);
-      toast({
-        title: "Erreur d'inscription",
-        description: "Impossible de créer le compte",
-        variant: "destructive",
-      });
-      return { success: false, error: "Erreur réseau" };
+      return { success: false, error: "Erreur d'inscription" };
     } finally {
       setIsRegisterLoading(false);
     }
@@ -153,19 +175,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const logout = async () => {
     try {
-      // Pour JWT, on déconnecte côté client
-      setUser(null);
-      toast({
-        title: "Déconnexion",
-        description: "À bientôt !",
+      await fetch("/api/auth/signout", {
+        method: "POST",
+        credentials: "include",
       });
     } catch (error) {
       console.error("Erreur logout:", error);
+    } finally {
       setUser(null);
+      toast({
+        title: "Déconnexion",
+        description: "Vous avez été déconnecté avec succès.",
+      });
     }
   };
 
-  const value = {
+  const value: AuthContextType = {
     user,
     isAuthenticated: !!user,
     isLoading,
@@ -176,11 +201,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     isRegisterLoading,
   };
 
-  return (
-    <AuthContext.Provider value={value}>
-      {children}
-    </AuthContext.Provider>
-  );
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 
 export function useAuth() {
