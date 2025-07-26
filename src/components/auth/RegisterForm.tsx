@@ -7,6 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Loader2 } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Badge } from '@/components/ui/badge';
 
 export function RegisterForm() {
   const { register, isRegisterLoading } = useAuth();
@@ -56,6 +57,27 @@ export function RegisterForm() {
     setFormData(prev => ({ ...prev, [field]: value }));
   };
 
+  const getRoleDescription = (role: string) => {
+    switch (role) {
+      case 'NURSE':
+        return {
+          title: 'Infirmier(e)',
+          description: 'Accédez aux missions, gérez votre planning et connectez-vous avec les établissements.',
+          features: ['Missions disponibles', 'Planning flexible', 'Notifications en temps réel']
+        };
+      case 'ESTABLISHMENT':
+        return {
+          title: 'Établissement de santé',
+          description: 'Publiez des missions, gérez vos équipes et trouvez des infirmiers qualifiés.',
+          features: ['Publication de missions', 'Gestion d\'équipe', 'Suivi des performances']
+        };
+      default:
+        return { title: '', description: '', features: [] };
+    }
+  };
+
+  const roleInfo = getRoleDescription(formData.role);
+
   return (
     <Card className="w-full max-w-md mx-auto">
       <CardHeader>
@@ -77,6 +99,7 @@ export function RegisterForm() {
               <Label htmlFor="firstName">Prénom</Label>
               <Input
                 id="firstName"
+                name="firstName"
                 value={formData.firstName}
                 onChange={(e) => handleInputChange('firstName', e.target.value)}
                 placeholder="Prénom"
@@ -89,6 +112,7 @@ export function RegisterForm() {
               <Label htmlFor="lastName">Nom</Label>
               <Input
                 id="lastName"
+                name="lastName"
                 value={formData.lastName}
                 onChange={(e) => handleInputChange('lastName', e.target.value)}
                 placeholder="Nom"
@@ -102,6 +126,7 @@ export function RegisterForm() {
             <Label htmlFor="email">Email</Label>
             <Input
               id="email"
+              name="email"
               type="email"
               value={formData.email}
               onChange={(e) => handleInputChange('email', e.target.value)}
@@ -115,6 +140,7 @@ export function RegisterForm() {
             <Label htmlFor="password">Mot de passe</Label>
             <Input
               id="password"
+              name="password"
               type="password"
               value={formData.password}
               onChange={(e) => handleInputChange('password', e.target.value)}
@@ -128,6 +154,7 @@ export function RegisterForm() {
             <Label htmlFor="confirmPassword">Confirmer le mot de passe</Label>
             <Input
               id="confirmPassword"
+              name="confirmPassword"
               type="password"
               value={formData.confirmPassword}
               onChange={(e) => handleInputChange('confirmPassword', e.target.value)}
@@ -143,7 +170,7 @@ export function RegisterForm() {
               value={formData.role}
               onValueChange={(value) => handleInputChange('role', value)}
             >
-              <SelectTrigger>
+              <SelectTrigger id="role" name="role">
                 <SelectValue placeholder="Sélectionnez votre rôle" />
               </SelectTrigger>
               <SelectContent>
@@ -152,6 +179,27 @@ export function RegisterForm() {
               </SelectContent>
             </Select>
           </div>
+
+          {/* Informations contextuelles sur le rôle sélectionné */}
+          {formData.role && (
+            <div className="p-4 bg-muted rounded-lg space-y-3">
+              <div className="flex items-center gap-2">
+                <Badge variant="secondary">{roleInfo.title}</Badge>
+              </div>
+              <p className="text-sm text-muted-foreground">{roleInfo.description}</p>
+              <div className="space-y-1">
+                <p className="text-xs font-medium text-muted-foreground">Fonctionnalités incluses :</p>
+                <ul className="text-xs text-muted-foreground space-y-1">
+                  {roleInfo.features.map((feature, index) => (
+                    <li key={index} className="flex items-center gap-2">
+                      <span className="w-1 h-1 bg-primary rounded-full"></span>
+                      {feature}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+          )}
 
           <Button
             type="submit"
