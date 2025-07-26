@@ -11,4 +11,19 @@ export default defineConfig({
       '@shared': path.resolve(__dirname, './shared'),
     },
   },
+  server: {
+    watch: {
+      usePolling: true,
+    },
+    host: true,
+    strictPort: true,
+    port: 5173,
+    proxy: {
+      '/api': {
+        target: 'http://localhost:5001',
+        changeOrigin: true,
+        secure: false,
+      },
+    },
+  },
 })
