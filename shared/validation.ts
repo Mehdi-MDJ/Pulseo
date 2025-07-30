@@ -6,7 +6,7 @@ export const signupSchema = z.object({
   password: z.string().min(8, { message: "Le mot de passe doit contenir au moins 8 caractères" }),
   firstName: z.string().min(2, { message: "Le prénom est requis" }),
   lastName: z.string().min(2, { message: "Le nom de famille est requis" }),
-  role: z.enum(['nurse', 'facility'], { message: "Le rôle n'est pas valide" }),
+  role: z.enum(['NURSE', 'ESTABLISHMENT'], { message: "Le rôle n'est pas valide" }),
 });
 
 // Schéma de validation pour la connexion

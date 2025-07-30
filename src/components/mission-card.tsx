@@ -24,9 +24,16 @@ export function MissionCard({ mission, userRole, mobileView = false }: MissionCa
   const [showEditModal, setShowEditModal] = useState(false);
   const { toast } = useToast();
   const { user } = useAuth();
-  
+
   const { data: nurseProfile } = useQuery({
     queryKey: ["/api/nurse-profile"],
+    queryFn: async () => {
+      const response = await fetch("/api/nurse-profile");
+      if (!response.ok) {
+        throw new Error("Failed to fetch nurse profile");
+      }
+      return response.json();
+    },
     enabled: userRole === "nurse"
   });
   const queryClient = useQueryClient();
@@ -60,7 +67,7 @@ export function MissionCard({ mission, userRole, mobileView = false }: MissionCa
       completed: { label: "Terminé", variant: "secondary" as const, className: "bg-gray-500 text-white" },
       cancelled: { label: "Annulé", variant: "destructive" as const, className: "bg-alert-red text-white" },
     };
-    
+
     const statusInfo = statusMap[status as keyof typeof statusMap] || statusMap.open;
     return (
       <Badge variant={statusInfo.variant} className={statusInfo.className}>
@@ -76,7 +83,7 @@ export function MissionCard({ mission, userRole, mobileView = false }: MissionCa
       high: { label: "Élevée", className: "bg-orange-500 text-white" },
       urgent: { label: "Urgente", className: "bg-alert-red text-white" },
     };
-    
+
     const priorityInfo = priorityMap[priority as keyof typeof priorityMap] || priorityMap.medium;
     return (
       <Badge className={priorityInfo.className}>
@@ -86,18 +93,43 @@ export function MissionCard({ mission, userRole, mobileView = false }: MissionCa
   };
 
   const formatDate = (date: string | Date) => {
-    return format(new Date(date), "dd MMM yyyy", { locale: fr });
+    try {
+      const validDate = new Date(date);
+      if (isNaN(validDate.getTime())) {
+        return "Date invalide";
+      }
+      return format(validDate, "dd MMM yyyy", { locale: fr });
+    } catch (error) {
+      return "Date invalide";
+    }
   };
 
   const formatTime = (date: string | Date) => {
-    return format(new Date(date), "HH:mm");
+    try {
+      const validDate = new Date(date);
+      if (isNaN(validDate.getTime())) {
+        return "00:00";
+      }
+      return format(validDate, "HH:mm");
+    } catch (error) {
+      return "00:00";
+    }
   };
 
   const calculateDuration = () => {
-    const start = new Date(mission.startDate);
-    const end = new Date(mission.endDate);
-    const hours = Math.round((end.getTime() - start.getTime()) / (1000 * 60 * 60));
-    return `${hours}h`;
+    try {
+      const start = new Date(mission.startDate);
+      const end = new Date(mission.endDate);
+
+      if (isNaN(start.getTime()) || isNaN(end.getTime())) {
+        return "Durée inconnue";
+      }
+
+      const hours = Math.round((end.getTime() - start.getTime()) / (1000 * 60 * 60));
+      return `${hours}h`;
+    } catch (error) {
+      return "Durée inconnue";
+    }
   };
 
   const handleApply = () => {
@@ -219,8 +251,8 @@ export function MissionCard({ mission, userRole, mobileView = false }: MissionCa
                   {mission.applications ? `${mission.applications} candidatures` : "En recherche"}
                 </span>
               </div>
-              <Button 
-                variant="outline" 
+              <Button
+                variant="outline"
                 size={mobileView ? "sm" : "default"}
                 onClick={() => setShowEditModal(true)}
               >

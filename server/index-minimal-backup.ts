@@ -368,11 +368,11 @@ app.post("/api/missions", validate(missionSchema), async (req, res) => {
     })
   }
 
-        const db = await getDb()
+    const db = await getDb()
 
     const newMission = await db.insert(missions).values({
-      title,
-      description,
+    title,
+    description,
       specialization,
       hourlyRate: parseFloat(hourlyRate),
       address: location,
@@ -447,9 +447,10 @@ app.get("/api/nurse-profile", async (req, res) => {
   }
 })
 
-// Récupérer le profil établissement
-app.get("/api/establishment/profile", async (req, res) => {
+// Candidature à une mission
+app.post("/api/missions/:missionId/apply", async (req, res) => {
   try {
+    const { missionId } = req.params
     const { sessionId } = req.cookies
 
     if (!sessionId) {
@@ -472,348 +473,20 @@ app.get("/api/establishment/profile", async (req, res) => {
       where: eq(users.id, decoded.userId)
     })
 
-    if (!user || user.role !== 'establishment') {
+    if (!user || user.role !== 'nurse') {
       return res.status(403).json({
-        error: "Accès refusé",
+        error: "Seuls les infirmiers peuvent postuler",
         code: "ACCESS_DENIED"
       })
     }
 
-    // Pour l'instant, retourner un profil simulé
-    res.json({
-      id: user.id,
-      name: `${user.firstName} ${user.lastName}`,
-      email: user.email,
-      type: "Hôpital",
-      address: "123 Rue de la Santé, 33000 Bordeaux",
-      phone: "+33 5 56 12 34 56",
-      specialties: ["Urgences", "Réanimation", "Gériatrie"],
-      activeMissions: 8,
-      totalMissions: 45
-    })
-  } catch (error) {
-    next(error)
-  }
-})
-
-// Statistiques de l'établissement
-app.get("/api/establishment/stats", async (req, res) => {
-  try {
-    const { sessionId } = req.cookies
-
-    if (!sessionId) {
-      return res.status(401).json({
-        error: "Session non trouvée",
-        code: "NO_SESSION"
-      })
-    }
-
-    const decoded = jwt.verify(sessionId, JWT_SECRET) as any
-    if (!decoded || !decoded.userId) {
-      return res.status(401).json({
-        error: "Session invalide",
-        code: "INVALID_SESSION"
-      })
-    }
-
-    const db = await getDb()
-    const user = await db.query.users.findFirst({
-      where: eq(users.id, decoded.userId)
-    })
-
-    if (!user || user.role !== 'establishment') {
-      return res.status(403).json({
-        error: "Accès refusé",
-        code: "ACCESS_DENIED"
-      })
-    }
-
-    // Statistiques simulées
-    res.json({
-      totalMissions: 45,
-      activeMissions: 8,
-      completedMissions: 37,
-      totalCandidates: 156,
-      pendingApplications: 23,
-      acceptedCandidates: 89,
-      averageResponseTime: "2.3 jours",
-      satisfactionRate: 4.7
-    })
-  } catch (error) {
-    next(error)
-  }
-})
-
-// Missions de l'établissement
-app.get("/api/establishment/missions", async (req, res) => {
-  try {
-    const { sessionId } = req.cookies
-
-    if (!sessionId) {
-      return res.status(401).json({
-        error: "Session non trouvée",
-        code: "NO_SESSION"
-      })
-    }
-
-    const decoded = jwt.verify(sessionId, JWT_SECRET) as any
-    if (!decoded || !decoded.userId) {
-      return res.status(401).json({
-        error: "Session invalide",
-        code: "INVALID_SESSION"
-      })
-    }
-
-    const db = await getDb()
-    const user = await db.query.users.findFirst({
-      where: eq(users.id, decoded.userId)
-    })
-
-    if (!user || user.role !== 'establishment') {
-      return res.status(403).json({
-        error: "Accès refusé",
-        code: "ACCESS_DENIED"
-      })
-    }
-
-    // Récupérer les missions de l'établissement
-    const establishmentMissions = await db.query.missions.findMany({
-      where: eq(missions.establishmentId, user.id)
-    })
-
-    res.json(establishmentMissions || [])
-  } catch (error) {
-    next(error)
-  }
-})
-
-// Candidats de l'établissement
-app.get("/api/establishment/candidates", async (req, res) => {
-  try {
-    const { sessionId } = req.cookies
-
-    if (!sessionId) {
-      return res.status(401).json({
-        error: "Session non trouvée",
-        code: "NO_SESSION"
-      })
-    }
-
-    const decoded = jwt.verify(sessionId, JWT_SECRET) as any
-    if (!decoded || !decoded.userId) {
-      return res.status(401).json({
-        error: "Session invalide",
-        code: "INVALID_SESSION"
-      })
-    }
-
-    const db = await getDb()
-    const user = await db.query.users.findFirst({
-      where: eq(users.id, decoded.userId)
-    })
-
-    if (!user || user.role !== 'establishment') {
-      return res.status(403).json({
-        error: "Accès refusé",
-        code: "ACCESS_DENIED"
-      })
-    }
-
-    // Candidatures simulées
-    res.json({
-      "Infirmier DE - Service Réanimation": [
-        {
-          id: 1,
-          candidateName: "Marie Dubois",
-          appliedDate: "14 Jan 2025",
-          status: "pending",
-          experience: "8 ans",
-          rating: 4.9,
-          specialization: "Réanimation",
-          cv: "cv_marie_dubois.pdf"
-        },
-        {
-          id: 4,
-          candidateName: "Pierre Dupont",
-          appliedDate: "11 Jan 2025",
-          status: "pending",
-          experience: "10 ans",
-          rating: 4.6,
-          specialization: "Réanimation",
-          cv: "cv_pierre_dupont.pdf"
-        }
-      ],
-      "Aide-soignant - Service Gériatrie": [
-        {
-          id: 2,
-          candidateName: "Thomas Martin",
-          appliedDate: "13 Jan 2025",
-          status: "accepted",
-          experience: "5 ans",
-          rating: 4.7,
-          specialization: "Gériatrie",
-          cv: "cv_thomas_martin.pdf"
-        }
-      ]
-    })
-  } catch (error) {
-    next(error)
-  }
-})
-
-// Templates de l'établissement
-app.get("/api/establishment/templates", async (req, res) => {
-  try {
-    const { sessionId } = req.cookies
-
-    if (!sessionId) {
-      return res.status(401).json({
-        error: "Session non trouvée",
-        code: "NO_SESSION"
-      })
-    }
-
-    const decoded = jwt.verify(sessionId, JWT_SECRET) as any
-    if (!decoded || !decoded.userId) {
-      return res.status(401).json({
-        error: "Session invalide",
-        code: "INVALID_SESSION"
-      })
-    }
-
-    const db = await getDb()
-    const user = await db.query.users.findFirst({
-      where: eq(users.id, decoded.userId)
-    })
-
-    if (!user || user.role !== 'establishment') {
-      return res.status(403).json({
-        error: "Accès refusé",
-        code: "ACCESS_DENIED"
-      })
-    }
-
-    // Templates simulés
-    res.json([
-      {
-        id: 1,
-        name: "Infirmier DE - Réanimation",
-        service: "Réanimation",
-        salary: "28€/heure",
-        duration: "3 mois",
-        skills: ["Réanimation", "Ventilation mécanique", "Cathéters"],
-        description: "Template pour poste en réanimation"
-      },
-      {
-        id: 2,
-        name: "Infirmier DE - Urgences",
-        service: "Urgences",
-        salary: "30€/heure",
-        duration: "6 mois",
-        skills: ["Urgences", "Traumatologie", "Réanimation"],
-        description: "Template pour poste en urgences"
-      }
-    ])
-  } catch (error) {
-    next(error)
-  }
-})
-
-// Analytics de l'établissement
-app.get("/api/analytics/establishment", async (req, res) => {
-  try {
-    const { sessionId } = req.cookies
-
-    if (!sessionId) {
-      return res.status(401).json({
-        error: "Session non trouvée",
-        code: "NO_SESSION"
-      })
-    }
-
-    const decoded = jwt.verify(sessionId, JWT_SECRET) as any
-    if (!decoded || !decoded.userId) {
-      return res.status(401).json({
-        error: "Session invalide",
-        code: "INVALID_SESSION"
-      })
-    }
-
-    const db = await getDb()
-    const user = await db.query.users.findFirst({
-      where: eq(users.id, decoded.userId)
-    })
-
-    if (!user || user.role !== 'establishment') {
-      return res.status(403).json({
-        error: "Accès refusé",
-        code: "ACCESS_DENIED"
-      })
-    }
-
-    // Données analytiques simulées
-    res.json({
-      monthlyStats: [
-        { month: "Jan", missions: 12, candidates: 45, completions: 8 },
-        { month: "Fév", missions: 15, candidates: 52, completions: 11 },
-        { month: "Mar", missions: 18, candidates: 67, completions: 14 },
-        { month: "Avr", missions: 14, candidates: 48, completions: 12 },
-        { month: "Mai", missions: 20, candidates: 73, completions: 16 },
-        { month: "Juin", missions: 22, candidates: 81, completions: 19 }
-      ],
-      topSpecializations: [
-        { name: "Réanimation", count: 15 },
-        { name: "Urgences", count: 12 },
-        { name: "Gériatrie", count: 8 },
-        { name: "Pédiatrie", count: 6 }
-      ],
-      responseTime: "2.3 jours",
-      satisfactionRate: 4.7
-    })
-  } catch (error) {
-    next(error)
-  }
-})
-
-// Métriques en temps réel
-app.get("/api/analytics/metrics/realtime", async (req, res) => {
-  try {
-    const { sessionId } = req.cookies
-
-    if (!sessionId) {
-      return res.status(401).json({
-        error: "Session non trouvée",
-        code: "NO_SESSION"
-      })
-    }
-
-    const decoded = jwt.verify(sessionId, JWT_SECRET) as any
-    if (!decoded || !decoded.userId) {
-      return res.status(401).json({
-        error: "Session invalide",
-        code: "INVALID_SESSION"
-      })
-    }
-
-    const db = await getDb()
-    const user = await db.query.users.findFirst({
-      where: eq(users.id, decoded.userId)
-    })
-
-    if (!user || user.role !== 'establishment') {
-      return res.status(403).json({
-        error: "Accès refusé",
-        code: "ACCESS_DENIED"
-      })
-    }
-
-    // Métriques en temps réel simulées
-    res.json({
-      activeMissions: 8,
-      pendingApplications: 23,
-      onlineCandidates: 12,
-      averageResponseTime: "2.3 jours",
-      lastUpdate: new Date().toISOString()
+    // Pour l'instant, simuler une candidature réussie
+    res.status(201).json({
+      message: "Candidature envoyée avec succès",
+      applicationId: `app_${Date.now()}`,
+      missionId,
+      nurseId: user.id,
+      status: "pending"
     })
   } catch (error) {
     next(error)

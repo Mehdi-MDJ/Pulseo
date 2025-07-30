@@ -64,13 +64,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
         // Vérifier si la réponse est du JSON
         if (contentType && contentType.includes("application/json")) {
-          const session = await response.json();
-          if (session.user) {
-            setUser(session.user);
-            console.log('[AuthProvider] Utilisateur authentifié:', session.user);
-          } else {
-            setUser(null);
-            console.log('[AuthProvider] Aucun utilisateur authentifié');
+        const session = await response.json();
+        if (session.user) {
+          setUser(session.user);
+          console.log('[AuthProvider] Utilisateur authentifié:', session.user);
+        } else {
+          setUser(null);
+          console.log('[AuthProvider] Aucun utilisateur authentifié');
           }
         } else {
           // Si ce n'est pas du JSON (probablement du HTML), le serveur backend n'est pas démarré
@@ -103,20 +103,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const contentType = response.headers.get("content-type");
 
         if (contentType && contentType.includes("application/json")) {
-          const data = await response.json();
-          setUser(data.user);
-          toast({
-            title: "Connexion réussie",
-            description: `Bienvenue ${data.user.name || data.user.email} !`,
-          });
-          return { success: true };
-        } else {
+        const data = await response.json();
+        setUser(data.user);
+        toast({
+          title: "Connexion réussie",
+          description: `Bienvenue ${data.user.name || data.user.email} !`,
+        });
+        return { success: true };
+      } else {
           // Serveur backend non disponible
-          toast({
-            title: "Erreur de connexion",
+        toast({
+          title: "Erreur de connexion",
             description: "Le serveur backend n'est pas disponible. Veuillez le démarrer.",
-            variant: "destructive",
-          });
+          variant: "destructive",
+        });
           return { success: false, error: "Serveur backend non disponible" };
         }
       } else {
@@ -147,18 +147,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (contentType && contentType.includes("application/json")) {
           const result = await response.json();
           setUser(result.user);
-          toast({
-            title: "Inscription réussie",
+      toast({
+        title: "Inscription réussie",
             description: `Bienvenue ${result.user.name || result.user.email} !`,
-          });
-          return { success: true };
+      });
+      return { success: true };
         } else {
           // Serveur backend non disponible
-          toast({
-            title: "Erreur d'inscription",
+      toast({
+        title: "Erreur d'inscription",
             description: "Le serveur backend n'est pas disponible. Veuillez le démarrer.",
-            variant: "destructive",
-          });
+        variant: "destructive",
+      });
           return { success: false, error: "Serveur backend non disponible" };
         }
       } else {

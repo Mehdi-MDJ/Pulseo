@@ -85,18 +85,39 @@ export default function Dashboard() {
   // Récupération des données via API
   const { data: establishmentProfile, isLoading: profileLoading } = useQuery({
     queryKey: ['/api/establishment/profile'],
+    queryFn: async () => {
+      const response = await fetch('/api/establishment/profile');
+      if (!response.ok) {
+        throw new Error('Failed to fetch establishment profile');
+      }
+      return response.json();
+    },
     enabled: user?.role === 'establishment',
     retry: 1
   });
 
   const { data: stats, isLoading: statsLoading } = useQuery({
     queryKey: ['/api/establishment/stats'],
+    queryFn: async () => {
+      const response = await fetch('/api/establishment/stats');
+      if (!response.ok) {
+        throw new Error('Failed to fetch establishment stats');
+      }
+      return response.json();
+    },
     enabled: user?.role === 'establishment',
     retry: 1
   });
 
   const { data: missions = [], isLoading: missionsLoading } = useQuery({
     queryKey: ['/api/establishment/missions'],
+    queryFn: async () => {
+      const response = await fetch('/api/establishment/missions');
+      if (!response.ok) {
+        throw new Error('Failed to fetch establishment missions');
+      }
+      return response.json();
+    },
     enabled: user?.role === 'establishment',
     retry: 1
   });
@@ -149,6 +170,13 @@ export default function Dashboard() {
 
   const { data: candidatesByMission = {} as Record<string, any[]>, isLoading: candidatesLoading, refetch: refetchCandidates } = useQuery({
     queryKey: ['/api/establishment/candidates'],
+    queryFn: async () => {
+      const response = await fetch('/api/establishment/candidates');
+      if (!response.ok) {
+        throw new Error('Failed to fetch establishment candidates');
+      }
+      return response.json();
+    },
     enabled: user?.role === 'establishment',
     retry: 1,
     staleTime: 0, // Toujours considérer les données comme obsolètes
@@ -192,6 +220,13 @@ export default function Dashboard() {
 
   const { data: templates = [], isLoading: templatesLoading } = useQuery({
     queryKey: ['/api/establishment/templates'],
+    queryFn: async () => {
+      const response = await fetch('/api/establishment/templates');
+      if (!response.ok) {
+        throw new Error('Failed to fetch establishment templates');
+      }
+      return response.json();
+    },
     enabled: user?.role === 'establishment',
     retry: 1
   });
@@ -199,6 +234,13 @@ export default function Dashboard() {
   // Requêtes pour les données analytiques
   const { data: analyticsData, isLoading: analyticsLoading } = useQuery({
     queryKey: ['/api/analytics/establishment'],
+    queryFn: async () => {
+      const response = await fetch('/api/analytics/establishment');
+      if (!response.ok) {
+        throw new Error('Failed to fetch analytics data');
+      }
+      return response.json();
+    },
     enabled: user?.role === 'establishment' && activeTab === 'analytics',
     retry: 1
   });
@@ -234,6 +276,13 @@ export default function Dashboard() {
 
   const { data: realtimeMetrics, isLoading: realtimeLoading } = useQuery({
     queryKey: ['/api/analytics/metrics/realtime'],
+    queryFn: async () => {
+      const response = await fetch('/api/analytics/metrics/realtime');
+      if (!response.ok) {
+        throw new Error('Failed to fetch realtime metrics');
+      }
+      return response.json();
+    },
     enabled: user?.role === 'establishment' && activeTab === 'analytics',
     refetchInterval: 30000, // Refresh every 30 seconds
     retry: 1
