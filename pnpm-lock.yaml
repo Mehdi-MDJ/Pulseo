@@ -386,7 +386,7 @@ importers:
         specifier: ^0.17.1
         version: 0.17.1
       zod:
-        specifier: ^3.25.67
+        specifier: ^3.25.76
         version: 3.25.76
     devDependencies:
       '@types/bcryptjs':

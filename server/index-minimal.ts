@@ -20,6 +20,9 @@ import { users, missions, notifications } from "../shared/schema.js"
 import { eq, and, desc } from "drizzle-orm"
 import bcrypt from "bcryptjs"
 import jwt from "jsonwebtoken"
+import { z } from 'zod'
+import { Request, Response, NextFunction } from 'express'
+import { signupSchema, signinSchema, missionSchema } from '../shared/validation.js'
 
 const app = express()
 
@@ -27,8 +30,12 @@ const app = express()
 // Configuration JWT
 // ==============================================================================
 
-// JWT Secret (à configurer via variable d'environnement en production)
-const JWT_SECRET = process.env.JWT_SECRET || 'fallback-secret'
+// Vérification de la clé JWT
+if (!process.env.JWT_SECRET) {
+  throw new Error("La variable d'environnement JWT_SECRET est manquante.");
+}
+
+const JWT_SECRET = process.env.JWT_SECRET
 
 // ==============================================================================
 // Configuration de sécurité
@@ -78,6 +85,26 @@ app.use(express.urlencoded({ extended: true, limit: "10mb" }))
 app.use(cookieParser())
 
 // ==============================================================================
+// Middleware de validation
+// ==============================================================================
+
+const validate = (schema: z.ZodObject<any, any>) =>
+  (req: Request, res: Response, next: NextFunction) => {
+    try {
+      schema.parse(req.body);
+      next();
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({
+          error: "Données invalides",
+          details: error.errors
+        });
+      }
+      next(error);
+    }
+  };
+
+// ==============================================================================
 // Routes de base
 // ==============================================================================
 
@@ -104,7 +131,7 @@ app.get("/api/test", (req, res) => {
 // ==============================================================================
 
 // Route d'inscription
-app.post("/api/auth/signup", async (req, res) => {
+app.post("/api/auth/signup", validate(signupSchema), async (req, res) => {
   try {
     const { email, password, firstName, lastName, role } = req.body
 
@@ -173,16 +200,12 @@ app.post("/api/auth/signup", async (req, res) => {
       message: "Inscription réussie"
     })
   } catch (error) {
-    console.error("Erreur inscription:", error)
-    res.status(500).json({
-      error: "Erreur lors de l'inscription",
-      code: "INTERNAL_ERROR"
-    })
+    next(error)
   }
 })
 
 // Route d'authentification
-app.post("/api/auth/signin", async (req, res) => {
+app.post("/api/auth/signin", validate(signinSchema), async (req, res) => {
   try {
     const { email, password } = req.body
 
@@ -244,11 +267,7 @@ app.post("/api/auth/signin", async (req, res) => {
       expires: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
     })
   } catch (error) {
-    console.error("Erreur connexion:", error)
-    res.status(500).json({
-      error: "Erreur lors de la connexion",
-      code: "INTERNAL_ERROR"
-    })
+    next(error)
   }
 })
 
@@ -311,11 +330,7 @@ app.get("/api/auth/session", async (req, res) => {
       expires: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
     })
   } catch (error) {
-    console.error("Erreur session:", error)
-    res.status(401).json({
-      error: "Session invalide",
-      code: "INVALID_SESSION"
-    })
+    next(error)
   }
 })
 
@@ -337,11 +352,7 @@ app.get("/api/missions", async (req, res) => {
       total: allMissions.length
     })
   } catch (error) {
-    console.error("Erreur récupération missions:", error)
-    res.status(500).json({
-      error: "Erreur lors de la récupération des missions",
-      code: "INTERNAL_ERROR"
-    })
+    next(error)
   }
 })
 
@@ -378,11 +389,7 @@ app.post("/api/missions", async (req, res) => {
       mission: newMission
     })
   } catch (error) {
-    console.error("Erreur création mission:", error)
-    res.status(500).json({
-      error: "Erreur lors de la création de la mission",
-      code: "INTERNAL_ERROR"
-    })
+    next(error)
   }
 })
 
@@ -404,11 +411,7 @@ app.get("/api/notifications", async (req, res) => {
       unread: allNotifications.filter((n: any) => !n.isRead).length
     })
   } catch (error) {
-    console.error("Erreur récupération notifications:", error)
-    res.status(500).json({
-      error: "Erreur lors de la récupération des notifications",
-      code: "INTERNAL_ERROR"
-    })
+    next(error)
   }
 })
 
