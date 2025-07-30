@@ -130,17 +130,9 @@ app.get("/api/test", (req, res) => {
 // Routes d'authentification
 // ==============================================================================
 
-// Route d'inscription
-app.post("/api/auth/signup", validate(signupSchema), async (req, res) => {
+app.post("/api/auth/signup", validate(signupSchema), async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { email, password, firstName, lastName, role } = req.body
-
-    if (!email || !password || !firstName || !lastName || !role) {
-      return res.status(400).json({
-        error: "Tous les champs sont requis",
-        code: "MISSING_FIELDS"
-      })
-    }
 
     const db = await getDb()
 
@@ -150,71 +142,59 @@ app.post("/api/auth/signup", validate(signupSchema), async (req, res) => {
     })
 
     if (existingUser) {
-      return res.status(409).json({
+      return res.status(400).json({
         error: "Un utilisateur avec cet email existe déjà",
-        code: "USER_ALREADY_EXISTS"
+        code: "USER_EXISTS"
       })
     }
 
     // Hasher le mot de passe
     const hashedPassword = await bcrypt.hash(password, 12)
 
-    // Créer l'utilisateur (l'ID sera généré automatiquement par cuid2)
+    // Créer le nouvel utilisateur
     const newUser = await db.insert(users).values({
       email,
+      password: hashedPassword,
       firstName,
       lastName,
-      passwordHash: hashedPassword,
       role: role.toLowerCase(), // Convertir en minuscules pour la cohérence
-      cguAccepted: true,
-      cguAcceptedAt: new Date(),
       createdAt: new Date(),
       updatedAt: new Date()
     }).returning().then((users: any[]) => users[0])
 
-    // Générer un JWT
+    // Générer le JWT
     const token = jwt.sign(
       { userId: newUser.id, email: newUser.email, role: newUser.role },
       JWT_SECRET,
-      { expiresIn: '30d' }
+      { expiresIn: '7d' }
     )
 
-    // Créer le cookie de session
+    // Définir le cookie httpOnly
     res.cookie('sessionId', token, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
-      maxAge: 30 * 24 * 60 * 60 * 1000 // 30 jours
+      sameSite: 'strict',
+      maxAge: 7 * 24 * 60 * 60 * 1000 // 7 jours
     })
 
     res.status(201).json({
+      message: "Utilisateur créé avec succès",
       user: {
         id: newUser.id,
         email: newUser.email,
         firstName: newUser.firstName,
         lastName: newUser.lastName,
-        role: newUser.role,
-        name: `${newUser.firstName} ${newUser.lastName}`
-      },
-      token,
-      expires: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
-      message: "Inscription réussie"
+        role: newUser.role
+      }
     })
   } catch (error) {
     next(error)
   }
 })
 
-// Route d'authentification
-app.post("/api/auth/signin", validate(signinSchema), async (req, res) => {
+app.post("/api/auth/signin", validate(signinSchema), async (req: Request, res: Response, next: NextFunction) => {
   try {
-  const { email, password } = req.body
-
-  if (!email || !password) {
-    return res.status(400).json({
-      error: "Email et mot de passe requis",
-      code: "MISSING_CREDENTIALS"
-    })
-  }
+    const { email, password } = req.body
 
     const db = await getDb()
 
@@ -225,65 +205,61 @@ app.post("/api/auth/signin", validate(signinSchema), async (req, res) => {
 
     if (!user) {
       return res.status(401).json({
-        error: "Identifiants invalides",
+        error: "Email ou mot de passe incorrect",
         code: "INVALID_CREDENTIALS"
       })
     }
 
     // Vérifier le mot de passe
-    const isPasswordValid = await bcrypt.compare(password, user.passwordHash || '')
+    const isPasswordValid = await bcrypt.compare(password, user.password)
 
     if (!isPasswordValid) {
       return res.status(401).json({
-        error: "Identifiants invalides",
+        error: "Email ou mot de passe incorrect",
         code: "INVALID_CREDENTIALS"
       })
     }
 
-    // Générer un JWT
+    // Générer le JWT
     const token = jwt.sign(
       { userId: user.id, email: user.email, role: user.role },
       JWT_SECRET,
-      { expiresIn: '30d' }
+      { expiresIn: '7d' }
     )
 
-    // Créer le cookie de session
+    // Définir le cookie httpOnly
     res.cookie('sessionId', token, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
-      maxAge: 30 * 24 * 60 * 60 * 1000 // 30 jours
+      sameSite: 'strict',
+      maxAge: 7 * 24 * 60 * 60 * 1000 // 7 jours
     })
 
     res.json({
+      message: "Connexion réussie",
       user: {
         id: user.id,
         email: user.email,
         firstName: user.firstName,
         lastName: user.lastName,
-        role: user.role,
-        name: `${user.firstName} ${user.lastName}`
-      },
-      token,
-      expires: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
+        role: user.role
+      }
     })
   } catch (error) {
     next(error)
   }
 })
 
-// Route de déconnexion
-app.post("/api/auth/signout", (req, res) => {
-  // En JWT, on ne stocke pas de session côté serveur
-  // Le cookie sera supprimé côté client
-  res.clearCookie('sessionId')
-
-  res.json({
-    message: "Déconnexion réussie"
-  })
+app.post("/api/auth/signout", async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    res.clearCookie('sessionId')
+    res.json({ message: "Déconnexion réussie" })
+  } catch (error) {
+    next(error)
+  }
 })
 
-// Route de session
-app.get("/api/auth/session", async (req, res) => {
+app.get("/api/auth/session", async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { sessionId } = req.cookies
 
@@ -294,19 +270,15 @@ app.get("/api/auth/session", async (req, res) => {
       })
     }
 
-    // Vérifier le JWT
     const decoded = jwt.verify(sessionId, JWT_SECRET) as any
-
     if (!decoded || !decoded.userId) {
-    return res.status(401).json({
+      return res.status(401).json({
         error: "Session invalide",
         code: "INVALID_SESSION"
       })
     }
 
     const db = await getDb()
-
-    // Récupérer l'utilisateur depuis la base de données
     const user = await db.query.users.findFirst({
       where: eq(users.id, decoded.userId)
     })
@@ -318,17 +290,15 @@ app.get("/api/auth/session", async (req, res) => {
       })
     }
 
-  res.json({
-    user: {
+    res.json({
+      user: {
         id: user.id,
         email: user.email,
         firstName: user.firstName,
         lastName: user.lastName,
-        role: user.role,
-        name: `${user.firstName} ${user.lastName}`
-    },
-    expires: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
-  })
+        role: user.role
+      }
+    })
   } catch (error) {
     next(error)
   }
@@ -338,37 +308,24 @@ app.get("/api/auth/session", async (req, res) => {
 // Routes des missions
 // ==============================================================================
 
-// Récupérer les missions
-app.get("/api/missions", async (req, res) => {
+app.get("/api/missions", async (req: Request, res: Response, next: NextFunction) => {
   try {
     const db = await getDb()
-
     const allMissions = await db.query.missions.findMany({
       orderBy: [desc(missions.createdAt)]
     })
 
-  res.json({
-      missions: allMissions,
-      total: allMissions.length
-  })
+    res.json(allMissions || [])
   } catch (error) {
     next(error)
   }
 })
 
-// Créer une mission
-app.post("/api/missions", validate(missionSchema), async (req, res) => {
+app.post("/api/missions", validate(missionSchema), async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { title, description, location, hourlyRate, specialization, startDate, endDate } = req.body
+    const { title, description, specialization, hourlyRate, location, startDate, endDate } = req.body
 
-    if (!title || !description || !location || !hourlyRate || !specialization) {
-    return res.status(400).json({
-      error: "Données manquantes",
-      code: "MISSING_DATA"
-    })
-  }
-
-        const db = await getDb()
+    const db = await getDb()
 
     const newMission = await db.insert(missions).values({
       title,
@@ -398,7 +355,7 @@ app.post("/api/missions", validate(missionSchema), async (req, res) => {
 // ==============================================================================
 
 // Récupérer le profil infirmier
-app.get("/api/nurse-profile", async (req, res) => {
+app.get("/api/nurse-profile", async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { sessionId } = req.cookies
 
@@ -448,7 +405,7 @@ app.get("/api/nurse-profile", async (req, res) => {
 })
 
 // Récupérer le profil établissement
-app.get("/api/establishment/profile", async (req, res) => {
+app.get("/api/establishment/profile", async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { sessionId } = req.cookies
 
@@ -497,7 +454,7 @@ app.get("/api/establishment/profile", async (req, res) => {
 })
 
 // Statistiques de l'établissement
-app.get("/api/establishment/stats", async (req, res) => {
+app.get("/api/establishment/stats", async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { sessionId } = req.cookies
 
@@ -545,7 +502,7 @@ app.get("/api/establishment/stats", async (req, res) => {
 })
 
 // Missions de l'établissement
-app.get("/api/establishment/missions", async (req, res) => {
+app.get("/api/establishment/missions", async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { sessionId } = req.cookies
 
@@ -588,7 +545,7 @@ app.get("/api/establishment/missions", async (req, res) => {
 })
 
 // Candidats de l'établissement
-app.get("/api/establishment/candidates", async (req, res) => {
+app.get("/api/establishment/candidates", async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { sessionId } = req.cookies
 
@@ -662,7 +619,7 @@ app.get("/api/establishment/candidates", async (req, res) => {
 })
 
 // Templates de l'établissement
-app.get("/api/establishment/templates", async (req, res) => {
+app.get("/api/establishment/templates", async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { sessionId } = req.cookies
 
@@ -720,7 +677,7 @@ app.get("/api/establishment/templates", async (req, res) => {
 })
 
 // Analytics de l'établissement
-app.get("/api/analytics/establishment", async (req, res) => {
+app.get("/api/analytics/establishment", async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { sessionId } = req.cookies
 
@@ -776,7 +733,7 @@ app.get("/api/analytics/establishment", async (req, res) => {
 })
 
 // Métriques en temps réel
-app.get("/api/analytics/metrics/realtime", async (req, res) => {
+app.get("/api/analytics/metrics/realtime", async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { sessionId } = req.cookies
 
@@ -824,19 +781,32 @@ app.get("/api/analytics/metrics/realtime", async (req, res) => {
 // Routes des notifications
 // ==============================================================================
 
-app.get("/api/notifications", async (req, res) => {
+app.get("/api/notifications", async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const db = await getDb()
+    const { sessionId } = req.cookies
 
-    const allNotifications = await db.query.notifications.findMany({
+    if (!sessionId) {
+      return res.status(401).json({
+        error: "Session non trouvée",
+        code: "NO_SESSION"
+      })
+    }
+
+    const decoded = jwt.verify(sessionId, JWT_SECRET) as any
+    if (!decoded || !decoded.userId) {
+      return res.status(401).json({
+        error: "Session invalide",
+        code: "INVALID_SESSION"
+      })
+    }
+
+    const db = await getDb()
+    const userNotifications = await db.query.notifications.findMany({
+      where: eq(notifications.userId, decoded.userId),
       orderBy: [desc(notifications.createdAt)]
     })
 
-  res.json({
-      notifications: allNotifications,
-      total: allNotifications.length,
-      unread: allNotifications.filter((n: any) => !n.isRead).length
-    })
+    res.json(userNotifications || [])
   } catch (error) {
     next(error)
   }
