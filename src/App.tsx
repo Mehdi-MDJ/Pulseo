@@ -8,6 +8,8 @@ import { DashboardLayout } from '@/components/ui/sidebar'; // Import de l'export
 import DashboardPage from '@/pages/dashboard';
 import HomePage from '@/pages/home';
 import NotFound from '@/pages/not-found';
+import MissionsListPage from '@/pages/missions-list';
+import MissionCreatePage from '@/pages/mission-create';
 
 /**
  * Composant de Route Protégée
@@ -60,6 +62,22 @@ function App() {
 
           {/* Autres routes enfants qui s'afficheront à l'intérieur du layout */}
           <Route path="dashboard" element={<DashboardPage />} />
+
+          {/* --- ROUTES MISSIONS --- */}
+          <Route path="missions">
+            <Route index element={<MissionsListPage />} />
+            <Route path="create" element={<MissionCreatePage />} />
+          </Route>
+
+          {/* Route alternative pour création de mission */}
+          <Route path="create-mission" element={<MissionCreatePage />} />
+
+          {/* Route de debug */}
+          <Route path="debug" element={<div>Page de debug - Navigation fonctionne !</div>} />
+
+          {/* Route de test pour création de mission */}
+          <Route path="test-create" element={<div>Page de test création - Fonctionne !</div>} />
+
           {/* Exemple pour le futur : <Route path="settings" element={<SettingsPage />} /> */}
         </Route>
 
